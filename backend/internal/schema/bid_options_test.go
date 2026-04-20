@@ -86,6 +86,7 @@ func TestValidateSealedOptions(t *testing.T) {
 		{"null no-op", `null`, false, ""},
 		{"no sealed keys no-op", `{"choices":["A"]}`, false, ""},
 		{"valid field ref", `{"sealed_until_at":"field:open_at"}`, false, ""},
+		{"valid cross-collection ref", `{"sealed_until_at":"field:rfq.open_at"}`, false, ""},
 		{"valid RFC3339", `{"sealed_until_at":"2026-05-01T00:00:00Z"}`, false, ""},
 		{"valid unlock statuses", `{"unlock_by_status":["opened","awarded"]}`, false, ""},
 		{"valid both", `{"sealed_until_at":"field:open_at","unlock_by_status":["opened"]}`, false, ""},
