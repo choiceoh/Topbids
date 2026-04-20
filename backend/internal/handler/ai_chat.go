@@ -28,8 +28,6 @@ Your role is to answer user questions about the platform and help them use it ef
 
 ` + chatGuide + `
 
-` + solarDomainGuide + `
-
 ## Tools
 You have tools to look up workspace data. Use them when the user asks about specific apps, fields, or data:
 - list_collections: 워크스페이스의 앱 목록 조회
