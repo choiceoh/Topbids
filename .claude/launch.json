@@ -3,13 +3,13 @@
   "configurations": [
     {
       "name": "api",
-      "runtimeExecutable": "/opt/homebrew/bin/go",
+      "runtimeExecutable": "C:\\Program Files\\Go\\bin\\go.exe",
       "runtimeArgs": ["run", "-C", "backend", "./cmd/server"],
       "port": 8080
     },
     {
       "name": "ui",
-      "runtimeExecutable": "/opt/homebrew/bin/node",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
       "runtimeArgs": [".claude/start-ui.mjs", "--port", "5173", "--host"],
       "port": 5173
     }
