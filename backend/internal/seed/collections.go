@@ -13,31 +13,27 @@ import (
 )
 
 // Preset encodes a collection to create if it does not already exist.
+// AccessConfig is optional; when nil, the collection has no role restrictions
+// and no BidRole. Used by Topbids bid-domain presets to declare bid_role.
 type Preset struct {
-	Slug        string
-	Label       string
-	Description string
-	Icon        string
-	IsSystem    bool
-	Fields      []schema.CreateFieldIn
+	Slug         string
+	Label        string
+	Description  string
+	Icon         string
+	IsSystem     bool
+	Fields       []schema.CreateFieldIn
+	AccessConfig *schema.AccessConfig
 }
 
-// Presets returns the built-in collection presets for Phaeton.
-// Ordering matters: system collections first, then "projects" before "milestones" so relation targets exist.
+// Presets returns the built-in collection presets for Topbids.
+// Bids collection is created separately in Run() because it needs relation
+// target IDs from rfqs and suppliers (see applyBidRelations).
+//
+// Subsidiary/department data lives in auth.subsidiaries / auth.departments
+// (see handler/subsidiary.go and handler/department.go) — not seeded as
+// dynamic collections.
 func Presets() []Preset {
-	return []Preset{
-		orgSubsidiariesPreset(),
-		orgDepartmentsPreset(),
-		projectsPreset(),
-		milestonesPreset(),
-		staffPreset(),
-		documentsPreset(),
-		customersPreset(),
-		inventoryPreset(),
-		requestsPreset(),
-		meetingsPreset(),
-		expensesPreset(),
-	}
+	return BidPresets()
 }
 
 func orgSubsidiariesPreset() Preset {
@@ -310,12 +306,13 @@ func Run(ctx context.Context, engine *migration.Engine, cache *schema.Cache) err
 		}
 
 		req := &schema.CreateCollectionReq{
-			Slug:        p.Slug,
-			Label:       p.Label,
-			Description: p.Description,
-			Icon:        p.Icon,
-			IsSystem:    p.IsSystem,
-			Fields:      p.Fields,
+			Slug:         p.Slug,
+			Label:        p.Label,
+			Description:  p.Description,
+			Icon:         p.Icon,
+			IsSystem:     p.IsSystem,
+			Fields:       p.Fields,
+			AccessConfig: p.AccessConfig,
 		}
 		col, err := engine.CreateCollection(ctx, req)
 		if err != nil {
@@ -325,12 +322,9 @@ func Run(ctx context.Context, engine *migration.Engine, cache *schema.Cache) err
 		slog.Info("seed: created collection", "slug", p.Slug, "id", col.ID)
 	}
 
-	// After all base collections exist, add relations.
-	if err := applyOrgRefs(ctx, engine, cache); err != nil {
-		return fmt.Errorf("seed: apply org refs: %w", err)
-	}
-	if err := applyProjectRefs(ctx, engine, cache); err != nil {
-		return fmt.Errorf("seed: apply project refs: %w", err)
+	// After base collections exist, create bids with rfq/supplier relations.
+	if err := applyBidRelations(ctx, engine, cache); err != nil {
+		return fmt.Errorf("seed: apply bid relations: %w", err)
 	}
 
 	return nil
@@ -401,62 +395,71 @@ func applyOrgRefs(ctx context.Context, engine *migration.Engine, cache *schema.C
 	return nil
 }
 
-// applyProjectRefs adds project relation fields to milestones, staff, and documents
-// pointing to the projects collection. Skips any that already exist.
-func applyProjectRefs(ctx context.Context, engine *migration.Engine, cache *schema.Cache) error {
-	projects, ok := cache.CollectionBySlug("projects")
-	if !ok {
+// applyBidRelations creates the "bids" collection with relations to rfqs and
+// suppliers, then sets each RFQ status's display ordering.
+//
+// bids is created here (not in Presets) because it needs rfqs/suppliers IDs
+// for its relation fields — those IDs aren't known until those collections
+// are seeded earlier in Run().
+func applyBidRelations(ctx context.Context, engine *migration.Engine, cache *schema.Cache) error {
+	rfqs, rfqOK := cache.CollectionBySlug("rfqs")
+	suppliers, supOK := cache.CollectionBySlug("suppliers")
+	if !rfqOK || !supOK {
+		slog.Warn("seed: skipping bids, rfqs/suppliers not present")
 		return nil
 	}
 
-	targets := []struct {
-		slug     string
-		field    string
-		required bool
-	}{
-		{"milestones", "project", true},
-		{"staff", "project", false},
-		{"documents", "project", false},
+	// Skip if bids already exists.
+	if _, exists := cache.CollectionBySlug("bids"); exists {
+		return nil
 	}
 
-	for _, t := range targets {
-		col, ok := cache.CollectionBySlug(t.slug)
-		if !ok {
-			continue
-		}
-
-		// Skip if relation field already present.
-		exists := false
-		for _, f := range cache.Fields(col.ID) {
-			if f.Slug == t.field {
-				exists = true
-				break
-			}
-		}
-		if exists {
-			continue
-		}
-
-		req := &schema.CreateFieldIn{
-			Slug:       t.field,
-			Label:      "프로젝트",
+	// Compose bids preset with relation fields prepended.
+	preset := bidsPreset()
+	relationFields := []schema.CreateFieldIn{
+		{
+			Slug:       "rfq",
+			Label:      "입찰공고",
 			FieldType:  schema.FieldRelation,
-			IsRequired: t.required,
+			IsRequired: true,
 			IsIndexed:  true,
+			Width:      3,
 			Relation: &schema.CreateRelIn{
-				TargetCollectionID: projects.ID,
+				TargetCollectionID: rfqs.ID,
 				RelationType:       schema.RelOneToMany,
 				OnDelete:           "CASCADE",
 			},
-		}
-
-		_, _, err := engine.AddField(ctx, col.ID, req, true)
-		if err != nil {
-			return fmt.Errorf("add %s.%s: %w", t.slug, t.field, err)
-		}
-		slog.Info("seed: added relation", "collection", t.slug, "field", t.field)
+		},
+		{
+			Slug:       "supplier",
+			Label:      "공급사",
+			FieldType:  schema.FieldRelation,
+			IsRequired: true,
+			IsIndexed:  true,
+			Width:      3,
+			Relation: &schema.CreateRelIn{
+				TargetCollectionID: suppliers.ID,
+				RelationType:       schema.RelOneToMany,
+				OnDelete:           "CASCADE",
+			},
+		},
 	}
+	preset.Fields = append(relationFields, preset.Fields...)
 
+	req := &schema.CreateCollectionReq{
+		Slug:         preset.Slug,
+		Label:        preset.Label,
+		Description:  preset.Description,
+		Icon:         preset.Icon,
+		IsSystem:     preset.IsSystem,
+		Fields:       preset.Fields,
+		AccessConfig: preset.AccessConfig,
+	}
+	col, err := engine.CreateCollection(ctx, req)
+	if err != nil {
+		return fmt.Errorf("create bids: %w", err)
+	}
+	slog.Info("seed: created collection", "slug", "bids", "id", col.ID)
 	return nil
 }
 

@@ -111,13 +111,26 @@ func ValidateSealedOptions(raw json.RawMessage) error {
 	return nil
 }
 
-// validateSealedUntilAt checks that the value is either "field:<slug>" with a
-// valid slug, or a parseable RFC3339 timestamp.
+// validateSealedUntilAt checks that the value is either a field reference
+// ("field:<slug>" or "field:<rel>.<slug>" for cross-collection), or a
+// parseable RFC3339 timestamp.
+//
+// For field references, each dot-separated segment must be a valid slug.
+// SealedReadFilter (runtime) walks the relation chain to resolve cross-
+// collection refs. A one-segment ref points to the same-row field; a
+// two-segment ref walks one relation; deeper chains are allowed for
+// completeness but rarely needed.
 func validateSealedUntilAt(v string) error {
 	if strings.HasPrefix(v, "field:") {
-		slug := strings.TrimPrefix(v, "field:")
-		if err := ValidateSlug(slug); err != nil {
-			return fmt.Errorf("%w: sealed_until_at field ref %q: %v", ErrInvalidInput, v, err)
+		path := strings.TrimPrefix(v, "field:")
+		if path == "" {
+			return fmt.Errorf("%w: sealed_until_at field ref is empty", ErrInvalidInput)
+		}
+		for _, seg := range strings.Split(path, ".") {
+			if err := ValidateSlug(seg); err != nil {
+				return fmt.Errorf("%w: sealed_until_at field ref %q segment %q: %v",
+					ErrInvalidInput, v, seg, err)
+			}
 		}
 		return nil
 	}
