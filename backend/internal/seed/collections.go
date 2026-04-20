@@ -395,72 +395,115 @@ func applyOrgRefs(ctx context.Context, engine *migration.Engine, cache *schema.C
 	return nil
 }
 
-// applyBidRelations creates the "bids" collection with relations to rfqs and
-// suppliers, then sets each RFQ status's display ordering.
+// applyBidRelations creates the "bids" and "purchase_orders" collections
+// with relations to their dependencies, after the base presets (rfqs,
+// suppliers) are seeded.
 //
-// bids is created here (not in Presets) because it needs rfqs/suppliers IDs
-// for its relation fields — those IDs aren't known until those collections
-// are seeded earlier in Run().
+// Both collections live here (not in Presets) because they need IDs from
+// rfqs/suppliers/bids for relation fields — those IDs aren't known until
+// earlier seed steps complete.
+//
+// Order: bids (depends on rfqs, suppliers) → purchase_orders (depends on
+// rfqs, bids, suppliers).
 func applyBidRelations(ctx context.Context, engine *migration.Engine, cache *schema.Cache) error {
 	rfqs, rfqOK := cache.CollectionBySlug("rfqs")
 	suppliers, supOK := cache.CollectionBySlug("suppliers")
 	if !rfqOK || !supOK {
-		slog.Warn("seed: skipping bids, rfqs/suppliers not present")
+		slog.Warn("seed: skipping bids/purchase_orders, rfqs/suppliers not present")
 		return nil
 	}
 
-	// Skip if bids already exists.
+	if err := createBidsCollection(ctx, engine, cache, rfqs.ID, suppliers.ID); err != nil {
+		return err
+	}
+
+	bids, bidsOK := cache.CollectionBySlug("bids")
+	if !bidsOK {
+		return fmt.Errorf("bids collection unexpectedly missing after creation")
+	}
+
+	return createPurchaseOrdersCollection(ctx, engine, cache, rfqs.ID, bids.ID, suppliers.ID)
+}
+
+func createBidsCollection(ctx context.Context, engine *migration.Engine, cache *schema.Cache, rfqsID, suppliersID string) error {
 	if _, exists := cache.CollectionBySlug("bids"); exists {
 		return nil
 	}
 
-	// Compose bids preset with relation fields prepended.
 	preset := bidsPreset()
-	relationFields := []schema.CreateFieldIn{
+	preset.Fields = append([]schema.CreateFieldIn{
 		{
-			Slug:       "rfq",
-			Label:      "입찰공고",
-			FieldType:  schema.FieldRelation,
-			IsRequired: true,
-			IsIndexed:  true,
-			Width:      3,
+			Slug: "rfq", Label: "입찰공고", FieldType: schema.FieldRelation,
+			IsRequired: true, IsIndexed: true, Width: 3,
 			Relation: &schema.CreateRelIn{
-				TargetCollectionID: rfqs.ID,
-				RelationType:       schema.RelOneToMany,
-				OnDelete:           "CASCADE",
+				TargetCollectionID: rfqsID, RelationType: schema.RelOneToMany, OnDelete: "CASCADE",
 			},
 		},
 		{
-			Slug:       "supplier",
-			Label:      "공급사",
-			FieldType:  schema.FieldRelation,
-			IsRequired: true,
-			IsIndexed:  true,
-			Width:      3,
+			Slug: "supplier", Label: "공급사", FieldType: schema.FieldRelation,
+			IsRequired: true, IsIndexed: true, Width: 3,
 			Relation: &schema.CreateRelIn{
-				TargetCollectionID: suppliers.ID,
-				RelationType:       schema.RelOneToMany,
-				OnDelete:           "CASCADE",
+				TargetCollectionID: suppliersID, RelationType: schema.RelOneToMany, OnDelete: "CASCADE",
 			},
 		},
-	}
-	preset.Fields = append(relationFields, preset.Fields...)
+	}, preset.Fields...)
 
-	req := &schema.CreateCollectionReq{
-		Slug:         preset.Slug,
-		Label:        preset.Label,
-		Description:  preset.Description,
-		Icon:         preset.Icon,
-		IsSystem:     preset.IsSystem,
-		Fields:       preset.Fields,
-		AccessConfig: preset.AccessConfig,
-	}
-	col, err := engine.CreateCollection(ctx, req)
+	col, err := engine.CreateCollection(ctx, presetToReq(preset))
 	if err != nil {
 		return fmt.Errorf("create bids: %w", err)
 	}
 	slog.Info("seed: created collection", "slug", "bids", "id", col.ID)
 	return nil
+}
+
+func createPurchaseOrdersCollection(ctx context.Context, engine *migration.Engine, cache *schema.Cache, rfqsID, bidsID, suppliersID string) error {
+	if _, exists := cache.CollectionBySlug("purchase_orders"); exists {
+		return nil
+	}
+
+	preset := purchaseOrdersPreset()
+	preset.Fields = append([]schema.CreateFieldIn{
+		{
+			Slug: "rfq", Label: "입찰공고", FieldType: schema.FieldRelation,
+			IsRequired: true, IsIndexed: true, Width: 3,
+			Relation: &schema.CreateRelIn{
+				TargetCollectionID: rfqsID, RelationType: schema.RelOneToMany, OnDelete: "RESTRICT",
+			},
+		},
+		{
+			Slug: "bid", Label: "낙찰 입찰서", FieldType: schema.FieldRelation,
+			IsRequired: true, IsIndexed: true, Width: 3,
+			Relation: &schema.CreateRelIn{
+				TargetCollectionID: bidsID, RelationType: schema.RelOneToMany, OnDelete: "RESTRICT",
+			},
+		},
+		{
+			Slug: "supplier", Label: "공급사", FieldType: schema.FieldRelation,
+			IsRequired: true, IsIndexed: true, Width: 3,
+			Relation: &schema.CreateRelIn{
+				TargetCollectionID: suppliersID, RelationType: schema.RelOneToMany, OnDelete: "RESTRICT",
+			},
+		},
+	}, preset.Fields...)
+
+	col, err := engine.CreateCollection(ctx, presetToReq(preset))
+	if err != nil {
+		return fmt.Errorf("create purchase_orders: %w", err)
+	}
+	slog.Info("seed: created collection", "slug", "purchase_orders", "id", col.ID)
+	return nil
+}
+
+func presetToReq(p Preset) *schema.CreateCollectionReq {
+	return &schema.CreateCollectionReq{
+		Slug:         p.Slug,
+		Label:        p.Label,
+		Description:  p.Description,
+		Icon:         p.Icon,
+		IsSystem:     p.IsSystem,
+		Fields:       p.Fields,
+		AccessConfig: p.AccessConfig,
+	}
 }
 
 func jsonRaw(v any) json.RawMessage {
