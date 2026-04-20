@@ -34,7 +34,7 @@ func SeedData(ctx context.Context, pool *pgxpool.Pool, store *schema.Store, cach
 				"email":      "sales@daehan.example",
 				"phone":      "02-1234-5678",
 				"categories": []string{"자재"},
-				"status":     "활성",
+				"status":     "active",
 			},
 			{
 				"name":       "동산엔지니어링",
@@ -43,7 +43,7 @@ func SeedData(ctx context.Context, pool *pgxpool.Pool, store *schema.Store, cach
 				"email":      "info@dongsan.example",
 				"phone":      "031-2345-6789",
 				"categories": []string{"시공", "용역"},
-				"status":     "활성",
+				"status":     "active",
 			},
 			{
 				"name":       "남양글로벌",
@@ -52,7 +52,7 @@ func SeedData(ctx context.Context, pool *pgxpool.Pool, store *schema.Store, cach
 				"email":      "contact@namyang.example",
 				"phone":      "051-3456-7890",
 				"categories": []string{"자재", "장비"},
-				"status":     "활성",
+				"status":     "active",
 			},
 		})
 		if err != nil {
