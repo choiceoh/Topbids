@@ -105,6 +105,11 @@ const (
 //   - "department": viewers see rows created by users in their department
 //   - "subsidiary": viewers see rows created by users in their subsidiary
 //   - "filter": custom field-based filters (see RLSFilters)
+//
+// BidRole marks a collection as part of the bidding domain (Topbids).
+// Empty means not a bid collection. Valid values are BidRoleRfq, BidRoleBid,
+// BidRoleSupplier, BidRoleAward, BidRolePO (see bid_options.go).
+// Only BidRoleBid triggers the row-level sealed filter at read time.
 type AccessConfig struct {
 	EntryView   []string    `json:"entry_view,omitempty"`
 	EntryCreate []string    `json:"entry_create,omitempty"`
@@ -112,6 +117,7 @@ type AccessConfig struct {
 	EntryDelete []string    `json:"entry_delete,omitempty"`
 	RLSMode     string      `json:"rls_mode,omitempty"`
 	RLSFilters  []RLSFilter `json:"rls_filters,omitempty"`
+	BidRole     string      `json:"bid_role,omitempty"`
 }
 
 // RLSFilter defines a custom field-based row filter for RLS "filter" mode.

@@ -81,6 +81,11 @@ func ValidateCollectionCreate(req *CreateCollectionReq) error {
 	if strings.TrimSpace(req.Label) == "" {
 		return fmt.Errorf("%w: label is required", ErrInvalidInput)
 	}
+	if req.AccessConfig != nil {
+		if err := ValidateBidRole(req.AccessConfig.BidRole); err != nil {
+			return err
+		}
+	}
 	slugs := make(map[string]bool, len(req.Fields))
 	for i := range req.Fields {
 		if err := validateFieldIn(&req.Fields[i]); err != nil {
@@ -178,6 +183,12 @@ func validateFieldIn(f *CreateFieldIn) error {
 				return fmt.Errorf("%w: invalid on_delete %q", ErrInvalidInput, f.Relation.OnDelete)
 			}
 		}
+	}
+	// Sealed bid options (Topbids): structural validation regardless of
+	// the parent collection's bid_role. Runtime enforcement happens only
+	// when AccessConfig.BidRole == "bid".
+	if err := ValidateSealedOptions(f.Options); err != nil {
+		return fmt.Errorf("field %q: %w", f.Slug, err)
 	}
 	return nil
 }
