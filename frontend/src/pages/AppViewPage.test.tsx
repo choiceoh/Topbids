@@ -120,8 +120,8 @@ describe('AppViewPage', () => {
 
       await waitFor(() => {
         expect(screen.getByText('목록')).toBeInTheDocument()
-        expect(screen.getByText('보드')).toBeInTheDocument()
         expect(screen.getByText('캘린더')).toBeInTheDocument()
+        expect(screen.getByText('폼')).toBeInTheDocument()
       })
     })
   })

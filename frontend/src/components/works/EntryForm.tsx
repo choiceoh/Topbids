@@ -20,7 +20,6 @@ import { toast } from 'sonner'
 import RelationCombobox from '@/components/common/RelationCombobox'
 import RelationMultiCombobox from '@/components/common/RelationMultiCombobox'
 import UserCombobox from '@/components/common/UserCombobox'
-import SpreadsheetInput from './SpreadsheetInput'
 import { useAvailableTransitions, useSimilarRecords } from '@/hooks/useEntries'
 import { X } from 'lucide-react'
 
@@ -742,8 +741,6 @@ function FieldInput({
       return <FileInput value={value as string | undefined} onChange={onChange} />
     case 'table':
       return <TableAreaInput field={field} value={value} onChange={onChange} />
-    case 'spreadsheet':
-      return <SpreadsheetInput field={field} value={value} onChange={onChange} />
     case 'json':
       return (
         <Textarea
