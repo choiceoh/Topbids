@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/choiceoh/phaeton/backend/internal/bid"
 	"github.com/choiceoh/phaeton/backend/internal/events"
 	"github.com/choiceoh/phaeton/backend/internal/formula"
 	"github.com/choiceoh/phaeton/backend/internal/middleware"
@@ -207,6 +208,16 @@ func (h *DynHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Load M:N links.
 	h.loadM2MFields(r.Context(), records, fields, col.Slug)
 
+	// Topbids: mask sealed fields on bid-role collections (after relation
+	// expansion so cross-collection sealed_until_at refs resolve).
+	if col.AccessConfig.BidRole == schema.BidRoleBid {
+		user, _ := middleware.GetUser(r.Context())
+		now := time.Now()
+		for _, rec := range records {
+			bid.MaskSealedFields(fields, rec, "status", user.Role, now)
+		}
+	}
+
 	// Optional display formatting.
 	if params.Get("format") == "display" {
 		applyDisplayFormat(records, fields)
@@ -276,6 +287,12 @@ func (h *DynHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	// Load M:N links.
 	h.loadM2MFields(r.Context(), records, fields, col.Slug)
+
+	// Topbids: mask sealed fields on bid-role collections (see List).
+	if col.AccessConfig.BidRole == schema.BidRoleBid {
+		user, _ := middleware.GetUser(r.Context())
+		bid.MaskSealedFields(fields, records[0], "status", user.Role, time.Now())
+	}
 
 	// Optional display formatting.
 	if r.URL.Query().Get("format") == "display" {
