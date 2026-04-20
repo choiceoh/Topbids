@@ -123,6 +123,9 @@ func run() int {
 	aiClient := ai.NewClient(appCfg.AI)
 	aiHandler := handler.NewAIHandler(aiClient, store, pool, cache)
 
+	// Topbids bid-domain handler (award, PO distribution).
+	bidHandler := handler.NewBidHandler(pool, cache)
+
 	// SSE real-time events.
 	sseBroker := events.NewBroker()
 	sseHandler := handler.NewSSEHandler(sseBroker)
@@ -220,6 +223,7 @@ func run() int {
 		commentH:      commentHandler,
 		notifH:        notifHandler,
 		aiH:           aiHandler,
+		bidH:          bidHandler,
 		sseH:          sseHandler,
 		reportH:       reportHandler,
 		logger:        logger,
@@ -303,6 +307,7 @@ type routerConfig struct {
 	commentH      *handler.CommentHandler
 	notifH        *handler.NotificationHandler
 	aiH           *handler.AIHandler
+	bidH          *handler.BidHandler
 	sseH          *handler.SSEHandler
 	reportH       *handler.ReportHandler
 	logger        *slog.Logger
@@ -517,6 +522,12 @@ func buildRouter(cfg routerConfig) *chi.Mux {
 		r.Route("/api/ai", func(ai chi.Router) {
 			ai.Get("/health", cfg.aiH.HealthCheck)
 			ai.Post("/chat", cfg.aiH.Chat)
+		})
+
+		// Topbids bid-domain actions (director/pm only).
+		r.Route("/api/bid", func(b chi.Router) {
+			b.Use(middleware.RequireRole("director", "pm"))
+			b.Post("/rfqs/{rfqId}/award", cfg.bidH.Award)
 		})
 
 		// Notifications
