@@ -1,0 +1,34 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git fetch origin 2>/dev/null && BRANCH=$(git branch --show-current) && if [ \"$BRANCH\" = \"main\" ]; then git rebase origin/main; elif git rev-parse --git-dir 2>/dev/null | grep -q worktrees; then echo \"Current branch $BRANCH is up to date.\"; else git rebase origin/main; fi",
+            "timeout": 30,
+            "statusMessage": "Syncing with origin/main..."
+          },
+          {
+            "type": "command",
+            "command": "ROOT=$(git rev-parse --show-toplevel) && cd \"$ROOT/frontend\" && LOCK_HASH=$(md5 -q package-lock.json 2>/dev/null || md5sum package-lock.json 2>/dev/null | cut -d' ' -f1) && CACHED_HASH=$(cat \"$ROOT/.claude/.npm-checksum\" 2>/dev/null) && if [ ! -d node_modules ] || [ \"$LOCK_HASH\" != \"$CACHED_HASH\" ]; then npm install --silent 2>/dev/null && echo \"$LOCK_HASH\" > \"$ROOT/.claude/.npm-checksum\" && echo 'Dependencies installed.'; else echo 'Dependencies up to date.'; fi",
+            "timeout": 60,
+            "statusMessage": "Checking frontend dependencies..."
+          },
+          {
+            "type": "command",
+            "command": "BRANCH=$(git branch --show-current) && DIRTY=$(git status --porcelain 2>/dev/null | head -1) && if [ -n \"$DIRTY\" ]; then STATUS='(dirty)'; else STATUS='(clean)'; fi && echo \"{\\\"hookSpecificOutput\\\":{\\\"hookEventName\\\":\\\"SessionStart\\\",\\\"additionalContext\\\":\\\"Status: $STATUS\\n\\nRecent commits:\\n$(git log --oneline -5)\\n\\nChanged files vs origin/main:\\n$(git diff --name-only origin/main 2>/dev/null || echo 'N/A')\\\"}}\"",
+            "timeout": 10,
+            "statusMessage": "Loading git context..."
+          },
+          {
+            "type": "command",
+            "command": "pg_isready -h localhost -p 5432 -q 2>/dev/null && echo 'DB is ready.' || (docker compose ps db --format '{{.Status}}' 2>/dev/null | grep -qi 'up' && echo 'DB is ready.' || echo '{\"systemMessage\":\"⚠ DB 컨테이너가 실행 중이 아닙니다. make db를 실행하세요.\"}')",
+            "timeout": 10,
+            "statusMessage": "Checking DB status..."
+          }
+        ]
+      }
+    ]
+  }
+}

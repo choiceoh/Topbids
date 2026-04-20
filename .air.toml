@@ -1,0 +1,13 @@
+root = "backend"
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/phaeton ./cmd/server"
+  bin = "./tmp/phaeton"
+  include_ext = ["go", "html", "js", "css"]
+  include_dir = ["cmd", "internal", "pkg"]
+  exclude_dir = ["tmp", "vendor"]
+  delay = 1000
+
+[build.env]
+  AUTH_DISABLED = "true"

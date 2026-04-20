@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-test-go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/go-build
+          key: go-build-${{ runner.os }}-${{ hashFiles('backend/**/*.go', 'backend/go.sum') }}
+          restore-keys: go-build-${{ runner.os }}-
+
+      - name: Check gofmt
+        run: |
+          cd backend
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::Files not formatted with gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.1
+          working-directory: backend
+
+      - name: Go tests (unit)
+        run: cd backend && go test -short ./...
+
+  integration-test-go:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: phaeton
+          POSTGRES_PASSWORD: phaeton
+          POSTGRES_DB: phaeton_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U phaeton"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/go-build
+          key: go-build-${{ runner.os }}-${{ hashFiles('backend/**/*.go', 'backend/go.sum') }}
+          restore-keys: go-build-${{ runner.os }}-
+
+      - name: Go tests (integration)
+        env:
+          DATABASE_URL: postgres://phaeton:phaeton@localhost:5432/phaeton_test?sslmode=disable
+          TEST_DATABASE_URL: postgres://phaeton:phaeton@localhost:5432/phaeton_test?sslmode=disable
+        run: cd backend && go test -count=1 ./...
+
+  lint-and-test-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: cd frontend && npm ci
+
+      - name: ESLint
+        run: cd frontend && npm run lint
+
+      - name: Vitest
+        run: cd frontend && npx vitest run
+
+      - name: Build frontend
+        run: cd frontend && npm run build

@@ -1,0 +1,68 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: phaeton
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-phaeton}
+      POSTGRES_DB: phaeton
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U phaeton"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      DATABASE_URL: postgres://phaeton:${DB_PASSWORD:-phaeton}@db:5432/phaeton?sslmode=disable
+      CORS_ORIGIN: ${CORS_ORIGIN:-}
+      JWT_SECRET: ${JWT_SECRET:-phaeton-dev-secret}
+      ADDR: ":8080"
+      AI_BASE_URL: ${AI_BASE_URL:-http://host.docker.internal:8000}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  backup:
+    image: postgres:16-alpine
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        echo "Waiting for first backup schedule..."
+        while true; do
+          echo "[backup] Starting scheduled backup at $$(date -u +%H:%M:%S)"
+          /scripts/backup-db.sh
+          echo "[backup] Next backup in $${BACKUP_INTERVAL_HOURS:-24}h"
+          sleep $$(( $${BACKUP_INTERVAL_HOURS:-24} * 3600 ))
+        done
+    volumes:
+      - ./scripts:/scripts:ro
+    environment:
+      DATABASE_URL: postgres://phaeton:${DB_PASSWORD:-phaeton}@db:5432/phaeton?sslmode=disable
+      DROPBOX_REFRESH_TOKEN: ${DROPBOX_REFRESH_TOKEN:-}
+      DROPBOX_APP_KEY: ${DROPBOX_APP_KEY:-}
+      DROPBOX_APP_SECRET: ${DROPBOX_APP_SECRET:-}
+      DROPBOX_BACKUP_PATH: ${DROPBOX_BACKUP_PATH:-/phaeton-backups}
+      BACKUP_RETAIN_DAYS: ${BACKUP_RETAIN_DAYS:-30}
+      BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-24}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    profiles:
+      - backup
+
+volumes:
+  pgdata:
+    external: true
+    name: phaeton_pgdata
