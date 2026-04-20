@@ -1,0 +1,11 @@
+.git
+.env
+.env.*
+!.env.example
+.claude
+docs
+*.md
+!CLAUDE.md
+frontend/node_modules
+frontend/dist
+backend/bin

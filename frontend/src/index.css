@@ -1,0 +1,508 @@
+@import 'tailwindcss';
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@plugin "@tailwindcss/typography";
+@import "@fontsource-variable/geist";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    --font-heading: var(--font-sans);
+    --font-sans: 'Geist Variable', sans-serif;
+    --color-sidebar-ring: var(--sidebar-ring);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar: var(--sidebar);
+    --color-chart-5: var(--chart-5);
+    --color-chart-4: var(--chart-4);
+    --color-chart-3: var(--chart-3);
+    --color-chart-2: var(--chart-2);
+    --color-chart-1: var(--chart-1);
+    --color-ring: var(--ring);
+    --color-input: var(--input);
+    --color-border: var(--border);
+    --color-destructive: var(--destructive);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --color-foreground: var(--foreground);
+    --color-background: var(--background);
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-3xl: calc(var(--radius) * 2.2);
+    --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+    --background: oklch(0.993 0.002 80);
+    --foreground: oklch(0.16 0.01 260);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.16 0.01 260);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.16 0.01 260);
+    --primary: oklch(0.22 0.01 260);
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.965 0.003 80);
+    --secondary-foreground: oklch(0.22 0.01 260);
+    --muted: oklch(0.945 0.004 80);
+    --muted-foreground: oklch(0.52 0.01 260);
+    --accent: oklch(0.945 0.004 80);
+    --accent-foreground: oklch(0.22 0.01 260);
+    --destructive: oklch(0.577 0.245 27.325);
+    --border: oklch(0.915 0.005 80);
+    --input: oklch(0.915 0.005 80);
+    --ring: oklch(0.65 0.01 260);
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --radius: 0.625rem;
+    --sidebar: oklch(0.985 0.002 80);
+    --sidebar-foreground: oklch(0.16 0.01 260);
+    --sidebar-primary: oklch(0.22 0.01 260);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.965 0.003 80);
+    --sidebar-accent-foreground: oklch(0.22 0.01 260);
+    --sidebar-border: oklch(0.915 0.005 80);
+    --sidebar-ring: oklch(0.65 0.01 260);
+}
+
+.dark {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.922 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.556 0 0);
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --sidebar: oklch(0.205 0 0);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.488 0.243 264.376);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    }
+  body {
+    @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    }
+  html {
+    @apply font-sans;
+    font-size: 17px;
+    letter-spacing: -0.011em;
+    }
+
+  /* Ensure all interactive elements have visible focus indicators */
+  [role="button"]:focus-visible,
+  a:not([class*="focus-visible"]):focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background rounded-sm;
+  }
+
+  /* Premium scrollbar */
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: oklch(0.82 0.005 80);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.65 0.01 260);
+  }
+
+  /* Premium heading typography */
+  h1, h2, h3 {
+    letter-spacing: -0.025em;
+  }
+}
+
+/* Row highlight animation (CSV import) */
+@keyframes highlight-row {
+  0% { background-color: oklch(0.94 0 0); }
+  100% { background-color: transparent; }
+}
+.animate-highlight-row {
+  animation: highlight-row 2s ease-out;
+}
+
+/* Cell save flash animation (inline edit) */
+@keyframes cell-save-flash {
+  0% { background-color: oklch(0.92 0 0); }
+  50% { background-color: oklch(0.92 0 0); }
+  100% { background-color: transparent; }
+}
+.animate-cell-saved {
+  animation: cell-save-flash 1.5s ease-out;
+}
+
+/* Check icon fade-out after cell save */
+@keyframes check-fade-out {
+  0%, 60% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.animate-check-fade {
+  animation: check-fade-out 1.5s ease-out forwards;
+}
+
+/* Hide scrollbar on TabsList horizontal scroll */
+[role="tablist"]::-webkit-scrollbar {
+  display: none;
+}
+[role="tablist"] {
+  scrollbar-width: none;
+}
+
+/* Skeleton shimmer wave */
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--muted) 0%,
+    oklch(0.96 0 0) 40%,
+    var(--muted) 80%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* Button press feedback */
+[data-slot="button"]:not(:disabled):active {
+  transform: scale(0.975);
+  transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Premium layered shadows */
+.shadow-premium {
+  box-shadow:
+    0 1px 2px oklch(0.16 0.01 260 / 0.04),
+    0 3px 8px oklch(0.16 0.01 260 / 0.03),
+    0 8px 24px oklch(0.16 0.01 260 / 0.02);
+}
+.shadow-premium-lg {
+  box-shadow:
+    0 1px 2px oklch(0.16 0.01 260 / 0.04),
+    0 4px 12px oklch(0.16 0.01 260 / 0.04),
+    0 16px 40px oklch(0.16 0.01 260 / 0.04);
+}
+.shadow-premium-hover {
+  box-shadow:
+    0 2px 4px oklch(0.16 0.01 260 / 0.05),
+    0 8px 20px oklch(0.16 0.01 260 / 0.05),
+    0 20px 48px oklch(0.16 0.01 260 / 0.03);
+}
+
+/* Drag cancel spring-back */
+@keyframes spring-back {
+  0% { transform: scale(0.95) translateY(-4px); opacity: 0.6; }
+  50% { transform: scale(1.02) translateY(1px); opacity: 0.9; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+.animate-spring-back {
+  animation: spring-back 0.3s ease-out both;
+}
+
+/* ─── Transition & animation utilities ─── */
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out both;
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.35s ease-out both;
+}
+.animate-scale-in {
+  animation: scale-in 0.3s ease-out both;
+}
+.animate-slide-down {
+  animation: slide-down 0.25s ease-out both;
+}
+
+/* Stagger delays for list items */
+.stagger-1 { animation-delay: 30ms; }
+.stagger-2 { animation-delay: 60ms; }
+.stagger-3 { animation-delay: 90ms; }
+.stagger-4 { animation-delay: 120ms; }
+.stagger-5 { animation-delay: 150ms; }
+.stagger-6 { animation-delay: 180ms; }
+.stagger-7 { animation-delay: 210ms; }
+.stagger-8 { animation-delay: 240ms; }
+.stagger-9 { animation-delay: 270ms; }
+.stagger-10 { animation-delay: 300ms; }
+.stagger-11 { animation-delay: 330ms; }
+.stagger-12 { animation-delay: 360ms; }
+
+/* Tab content crossfade */
+[data-slot="tabs-content"] {
+  animation: fade-in 0.2s ease-out;
+}
+
+/* Nav link hover underline */
+.nav-link {
+  position: relative;
+  transition: color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.nav-link::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  width: 0;
+  height: 1.5px;
+  background: oklch(0.22 0.01 260);
+  border-radius: 999px;
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.nav-link:hover::after {
+  width: 60%;
+  left: 20%;
+}
+.nav-link.active {
+  color: oklch(0.16 0.01 260);
+  font-weight: 500;
+}
+.nav-link.active::after {
+  width: 100%;
+  left: 0;
+}
+
+/* ─── Functional animations ─── */
+
+/* Shake for form validation errors */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-3px); }
+  40%, 80% { transform: translateX(3px); }
+}
+.animate-shake {
+  animation: shake 0.3s ease-out;
+}
+
+/* Scale bounce for kanban card drop */
+@keyframes scale-bounce {
+  0% { transform: scale(1.03); }
+  50% { transform: scale(0.98); }
+  100% { transform: scale(1); }
+}
+.animate-scale-bounce {
+  animation: scale-bounce 0.25s ease-out;
+}
+
+/* Fade out (for item removal) */
+@keyframes fade-out {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-4px); }
+}
+.animate-fade-out {
+  animation: fade-out 0.2s ease-in forwards;
+}
+
+/* Row entrance for newly added items */
+@keyframes row-enter {
+  from { opacity: 0; transform: translateY(6px); background-color: oklch(0.92 0.02 240); }
+  to { opacity: 1; transform: translateY(0); background-color: transparent; }
+}
+.animate-row-enter {
+  animation: row-enter 0.4s ease-out both;
+}
+
+/* Calendar month slide transitions */
+@keyframes cal-slide-left {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(-40px); opacity: 0; }
+}
+@keyframes cal-slide-right {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(40px); opacity: 0; }
+}
+.animate-slide-left {
+  animation: cal-slide-left 0.2s ease-in forwards;
+}
+.animate-slide-right {
+  animation: cal-slide-right 0.2s ease-in forwards;
+}
+
+/* Drag ghost feedback */
+.dragging-source {
+  opacity: 0.4;
+  transform: scale(0.97);
+  transition: opacity 0.15s ease-out, transform 0.15s ease-out;
+}
+
+/* Page transition via View Transitions API */
+::view-transition-old(root) {
+  animation: vt-fade-out 120ms ease-out both;
+}
+::view-transition-new(root) {
+  animation: vt-fade-in 150ms ease-out 30ms both;
+}
+@keyframes vt-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+@keyframes vt-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Skeleton shimmer for premium loading feel */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton-shimmer {
+  background: linear-gradient(90deg, oklch(0.94 0 0) 0%, oklch(0.97 0 0) 40%, oklch(0.94 0 0) 80%);
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
+/* ── Print styles ── */
+@media print {
+  /* Hide everything except the sheet content */
+  body > div > div > nav,
+  body > div > div > main,
+  [data-sonner-toaster],
+  .fixed:not([data-sheet-content]) {
+    display: none !important;
+  }
+
+  /* Make the sheet content fill the page */
+  [data-radix-dialog-overlay] {
+    position: static !important;
+    background: none !important;
+  }
+
+  [role="dialog"] {
+    position: static !important;
+    transform: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Clean typography for print */
+  body {
+    font-size: 12pt !important;
+    color: black !important;
+    background: white !important;
+  }
+
+  /* Hide action buttons in print */
+  .print\:hidden,
+  [data-print-hide] {
+    display: none !important;
+  }
+
+  /* Ensure page breaks work nicely */
+  .space-y-4 > * {
+    break-inside: avoid;
+  }
+}
+
+/* Reduced motion: disable all custom animations */
+@media (prefers-reduced-motion: reduce) {
+  .animate-shake,
+  .animate-scale-bounce,
+  .animate-fade-out,
+  .animate-slide-left,
+  .animate-slide-right,
+  .animate-row-enter,
+  .animate-fade-in,
+  .animate-fade-in-up,
+  .animate-scale-in,
+  .animate-slide-down,
+  .animate-highlight-row,
+  .animate-cell-saved,
+  .animate-check-fade,
+  .animate-spring-back {
+    animation: none !important;
+  }
+  .skeleton-shimmer {
+    animation: none !important;
+  }
+  .dragging-source {
+    transition: none !important;
+  }
+  [data-slot="button"]:active {
+    transform: none !important;
+  }
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
+  }
+}
+
+/* Hide scrollbar while allowing scroll (for mobile tabs) */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}

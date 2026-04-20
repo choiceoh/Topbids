@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api",
+      "runtimeExecutable": "/opt/homebrew/bin/go",
+      "runtimeArgs": ["run", "-C", "backend", "./cmd/server"],
+      "port": 8080
+    },
+    {
+      "name": "ui",
+      "runtimeExecutable": "/opt/homebrew/bin/node",
+      "runtimeArgs": [".claude/start-ui.mjs", "--port", "5173", "--host"],
+      "port": 5173
+    }
+  ]
+}

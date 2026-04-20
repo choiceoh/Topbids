@@ -1,0 +1,40 @@
+version: "2"
+
+run:
+  timeout: 3m
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+linters:
+  disable:
+    - errcheck
+  enable:
+    - govet
+    - staticcheck
+    - unused
+    - ineffassign
+    - misspell
+    - unconvert
+    - gocritic
+
+  settings:
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+      disabled-tags:
+        - style
+        - experimental
+        - opinionated
+      disabled-checks:
+        - hugeParam
+        - rangeValCopy
+        - appendCombine
+        - exitAfterDefer
+
+  exclusions:
+    paths:
+      - vendor

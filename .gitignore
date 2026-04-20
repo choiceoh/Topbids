@@ -1,0 +1,23 @@
+# Go
+backend/bin/
+*.exe
+phaeton
+
+# Vite / Node
+frontend/node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# Build output — Vite emits SPA into Go's embed dir; assets are regenerated on build.
+# A placeholder index.html is committed so the embed FS is never empty.
+backend/cmd/server/static/assets/
+
+# Env
+.env
+.env.local
+
+# Editor / OS
+.DS_Store
+*.swp
+node_modules/
+.claude/worktrees
