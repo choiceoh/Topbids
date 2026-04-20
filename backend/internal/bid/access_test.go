@@ -234,6 +234,54 @@ func TestResolveUntilAt_MalformedReturnsFalse(t *testing.T) {
 
 // --- toTime ---
 
+// --- SupplierRowFilter ---
+
+func TestSupplierRowFilter(t *testing.T) {
+	cases := []struct {
+		name       string
+		role       string
+		supplierID string
+		startIdx   int
+		wantActive bool
+		wantSQL    string
+		wantArgs   int
+	}{
+		{"director skips", "director", "sup-123", 1, false, "", 0},
+		{"pm skips", "pm", "sup-123", 1, false, "", 0},
+		{"viewer skips", "viewer", "sup-123", 1, false, "", 0},
+		{"supplier with id → filter", "supplier", "sup-123", 1, true, "supplier = $1", 1},
+		{"supplier with id later idx", "supplier", "sup-456", 5, true, "supplier = $5", 1},
+		{"supplier without id fails closed", "supplier", "", 1, true, "1=0", 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sql, args, active := SupplierRowFilter(tc.role, tc.supplierID, tc.startIdx)
+			if active != tc.wantActive {
+				t.Errorf("active=%v, want %v", active, tc.wantActive)
+			}
+			if sql != tc.wantSQL {
+				t.Errorf("sql=%q, want %q", sql, tc.wantSQL)
+			}
+			if len(args) != tc.wantArgs {
+				t.Errorf("args len=%d, want %d", len(args), tc.wantArgs)
+			}
+		})
+	}
+}
+
+// --- MaskSealedFields bypass for supplier ---
+
+func TestMaskSealedFields_SupplierBypassesMask(t *testing.T) {
+	// Supplier viewing own row (upstream filter already applied) — fields
+	// should remain visible even with future sealed_until_at.
+	fields := []schema.Field{sealedField("amount", "2099-01-01T00:00:00Z")}
+	row := map[string]any{"amount": 1000, "status": "submitted"}
+	MaskSealedFields(fields, row, "status", "supplier", deadline)
+	if row["amount"] != 1000 {
+		t.Errorf("supplier should see own sealed values; got %v", row["amount"])
+	}
+}
+
 func TestToTime(t *testing.T) {
 	now := time.Now().UTC().Round(time.Second)
 	if tm, ok := toTime(now); !ok || !tm.Equal(now) {

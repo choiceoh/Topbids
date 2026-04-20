@@ -8,24 +8,46 @@
 package bid
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/choiceoh/phaeton/backend/internal/schema"
 )
 
-// Roles that are considered "buyer-side" — procurement staff who manage RFQs
-// and evaluate bids. They may view all bid rows, but cannot view sealed field
-// values until the row's sealed condition is met.
+// Role buckets. Separate because sealing and row-filtering apply differently:
 //
-// Administrators (director) additionally bypass sealing; they can always view
-// sealed values for auditing. This is a deliberate policy: for internal-regulation
-// bid systems (not public procurement), an administrator override is acceptable
-// and all reads are audit-logged separately.
+//   - adminRoles: bypass all sealing (bid field values always visible) and
+//     see all rows. Policy choice for internal-regulation systems.
+//   - buyerRoles: see all rows but sealed values are masked until unlock.
+//   - supplierRole: see only their own bid rows (WHERE supplier = user.SupplierID).
+//     Sealed values on their own rows are always visible — they submitted them.
 var (
-	buyerRoles = map[string]bool{"pm": true, "engineer": true}
-	adminRoles = map[string]bool{"admin": true, "director": true}
+	buyerRoles   = map[string]bool{"pm": true, "engineer": true}
+	adminRoles   = map[string]bool{"admin": true, "director": true}
+	supplierRole = "supplier"
 )
+
+// SupplierRowFilter returns a pgx-compatible SQL WHERE fragment restricting
+// bid rows to those owned by the caller's supplier.
+//
+// Returns ("", nil, false) for non-supplier users — callers should skip the
+// filter entirely. Returns (sql, args, true) when the user is a supplier
+// with a SupplierID; the caller appends "AND <sql>" to its WHERE clause
+// and extends its args with the returned slice.
+//
+// A supplier role user WITHOUT a SupplierID gets a contradictory filter
+// (1=0) — fail closed. This shouldn't happen in practice (SeedSupplierUser
+// enforces the pairing) but guards against misconfiguration.
+func SupplierRowFilter(userRole, supplierID string, startIdx int) (sql string, args []any, active bool) {
+	if userRole != supplierRole {
+		return "", nil, false
+	}
+	if supplierID == "" {
+		return "1=0", nil, true
+	}
+	return fmt.Sprintf("supplier = $%d", startIdx), []any{supplierID}, true
+}
 
 // MaskSealedFields walks the fields of a row and zeroes out any sealed-field
 // values whose unlock condition is not yet met, mutating the row in place.
@@ -50,7 +72,10 @@ func MaskSealedFields(
 	userRole string,
 	now time.Time,
 ) {
-	if adminRoles[userRole] {
+	// Admins always see sealed values. Suppliers viewing their own rows
+	// (filtered by SupplierRowFilter upstream) also see unmasked because
+	// they submitted the values themselves.
+	if adminRoles[userRole] || userRole == supplierRole {
 		return
 	}
 	statusVal := statusAsString(row, statusField)

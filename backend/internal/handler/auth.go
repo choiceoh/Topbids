@@ -41,6 +41,9 @@ type User struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 
 	SubsidiaryID *string `json:"subsidiary_id,omitempty"`
+	// SupplierID links a role="supplier" user to a row in data.suppliers.
+	// Populated for supplier-portal users only; nil for internal staff.
+	SupplierID *string `json:"supplier_id,omitempty"`
 
 	// Joined fields (populated by detail/list queries).
 	DepartmentName *string `json:"department_name,omitempty"`
@@ -53,6 +56,10 @@ const (
 	RolePM       = "pm"
 	RoleEngineer = "engineer"
 	RoleViewer   = "viewer"
+	// RoleSupplier is the external-bidder role. Users with this role must
+	// have SupplierID set and are restricted to their own bid rows via the
+	// row-level filter in handler/dynamic.go.
+	RoleSupplier = "supplier"
 )
 
 // LoginInput is the request body for /api/auth/login.
@@ -99,12 +106,12 @@ func Login(pool *pgxpool.Pool, limiter *middleware.RateLimiter, jwtSecret string
 		var user User
 		err := pool.QueryRow(r.Context(),
 			`SELECT id, email, name, password, role, is_active,
-			        external_id, department_id, subsidiary_id, position, title, phone, avatar,
+			        external_id, department_id, subsidiary_id, supplier_id, position, title, phone, avatar,
 			        joined_at::text
 			 FROM auth.users WHERE LOWER(email) = $1`,
 			email,
 		).Scan(&user.ID, &user.Email, &user.Name, &user.Password, &user.Role, &user.IsActive,
-			&user.ExternalID, &user.DepartmentID, &user.SubsidiaryID, &user.Position, &user.Title, &user.Phone, &user.Avatar,
+			&user.ExternalID, &user.DepartmentID, &user.SubsidiaryID, &user.SupplierID, &user.Position, &user.Title, &user.Phone, &user.Avatar,
 			&user.JoinedAt)
 
 		if err != nil {
@@ -682,6 +689,9 @@ func generateToken(user User, jwtSecret string) (string, error) {
 	}
 	if user.SubsidiaryID != nil {
 		claims["subsidiaryId"] = *user.SubsidiaryID
+	}
+	if user.SupplierID != nil {
+		claims["supplierId"] = *user.SupplierID
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(jwtSecret))

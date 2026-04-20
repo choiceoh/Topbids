@@ -18,6 +18,7 @@ const userContextKey contextKey = "user"
 var ExportedUserContextKey = userContextKey
 
 // UserClaims holds JWT claims for the authenticated user.
+// SupplierID is set for role="supplier" users and drives bid row filtering.
 type UserClaims struct {
 	UserID       string `json:"userId"`
 	Email        string `json:"email"`
@@ -25,6 +26,7 @@ type UserClaims struct {
 	Role         string `json:"role"`
 	DepartmentID string `json:"departmentId,omitempty"`
 	SubsidiaryID string `json:"subsidiaryId,omitempty"`
+	SupplierID   string `json:"supplierId,omitempty"`
 }
 
 // DevUser is the hard-coded user injected when auth is disabled.
@@ -117,6 +119,10 @@ func claimsToUser(claims jwt.MapClaims) (UserClaims, error) {
 	// Optional: subsidiaryId (may be absent for users without a subsidiary).
 	if subID, ok := claims["subsidiaryId"].(string); ok {
 		user.SubsidiaryID = subID
+	}
+	// Optional: supplierId (only set for role="supplier" users).
+	if supID, ok := claims["supplierId"].(string); ok {
+		user.SupplierID = supID
 	}
 
 	return user, nil
