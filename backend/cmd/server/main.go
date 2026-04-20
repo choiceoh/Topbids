@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/choiceoh/phaeton/backend/internal/ai"
+	"github.com/choiceoh/phaeton/backend/internal/bid"
 	"github.com/choiceoh/phaeton/backend/internal/config"
 	"github.com/choiceoh/phaeton/backend/internal/db"
 	"github.com/choiceoh/phaeton/backend/internal/events"
@@ -146,9 +147,12 @@ func run() int {
 	notifHandler := handler.NewNotificationHandler(pool)
 	handler.SubscribeNotifications(pool, bus, cache)
 
-	// Worker pool retained for future background tasks (bid scheduler, etc.).
+	// Worker pool retained for future background tasks.
 	wp := workerpool.New(0)
 	_ = wp
+
+	// Topbids RFQ status scheduler (published → closed → opened).
+	bidScheduler := bid.NewScheduler(pool, cache, bus, 30*time.Second)
 
 	// Login rate limiter: 5 failures / 15 minutes → 30 minute lockout.
 	loginLimiter := middleware.NewRateLimiter(5, 15*60*1000, 30*60*1000)
@@ -249,6 +253,9 @@ func run() int {
 		// Start sync runner in background.
 		go syncRunner.Start(ctx)
 
+		// Start Topbids RFQ scheduler.
+		bidScheduler.Start(ctx)
+
 		logging.PrintBanner(os.Stderr, logging.BannerInfo{
 			Version: version,
 			Addr:    ln.Addr().String(),
@@ -265,6 +272,7 @@ func run() int {
 
 			// Stop background workers before draining HTTP connections.
 			// syncRunner stops automatically via ctx cancellation.
+			bidScheduler.Stop()
 			sseBroker.Close()
 			wp.Wait()
 			logger.Info("background workers stopped")

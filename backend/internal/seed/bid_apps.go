@@ -48,10 +48,10 @@ func suppliersPreset() Preset {
 				Slug:         "status",
 				Label:        "상태",
 				FieldType:    schema.FieldSelect,
-				DefaultValue: jsonRaw("활성"),
+				DefaultValue: jsonRaw("active"),
 				Width:        3,
 				Options: jsonRaw(map[string]any{
-					"choices": []string{"활성", "정지", "블랙리스트"},
+					"choices": []string{"active", "suspended", "blacklisted"},
 				}),
 			},
 			{Slug: "note", Label: "비고", FieldType: schema.FieldTextarea, Width: 6},
@@ -87,10 +87,11 @@ func rfqsPreset() Preset {
 				Label:        "입찰방식",
 				FieldType:    schema.FieldSelect,
 				IsRequired:   true,
-				DefaultValue: jsonRaw("일반경쟁"),
+				DefaultValue: jsonRaw("open"),
 				Width:        3,
 				Options: jsonRaw(map[string]any{
-					"choices": []string{"일반경쟁", "지명경쟁", "수의계약"},
+					// Internal codes; UI maps to Korean labels.
+					"choices": []string{"open", "invited", "private"},
 				}),
 			},
 			{
@@ -98,10 +99,10 @@ func rfqsPreset() Preset {
 				Label:        "평가방식",
 				FieldType:    schema.FieldSelect,
 				IsRequired:   true,
-				DefaultValue: jsonRaw("최저가"),
+				DefaultValue: jsonRaw("lowest"),
 				Width:        3,
 				Options: jsonRaw(map[string]any{
-					"choices": []string{"최저가", "종합평가"},
+					"choices": []string{"lowest", "weighted"},
 				}),
 			},
 			{
@@ -118,10 +119,13 @@ func rfqsPreset() Preset {
 				Slug:         "status",
 				Label:        "상태",
 				FieldType:    schema.FieldSelect,
-				DefaultValue: jsonRaw("작성중"),
+				DefaultValue: jsonRaw("draft"),
 				Width:        3,
 				Options: jsonRaw(map[string]any{
-					"choices": []string{"작성중", "공고중", "마감", "개찰", "평가", "낙찰", "유찰", "취소"},
+					// Internal codes; scheduler (bid.Scheduler) transitions
+					// draft → published → closed → opened. evaluating/awarded
+					// /failed/cancelled are set by user actions.
+					"choices": []string{"draft", "published", "closed", "opened", "evaluating", "awarded", "failed", "cancelled"},
 				}),
 			},
 		},
@@ -179,10 +183,10 @@ func bidsPreset() Preset {
 				Slug:         "status",
 				Label:        "상태",
 				FieldType:    schema.FieldSelect,
-				DefaultValue: jsonRaw("작성중"),
+				DefaultValue: jsonRaw("draft"),
 				Width:        3,
 				Options: jsonRaw(map[string]any{
-					"choices": []string{"작성중", "제출", "개찰됨", "평가완료", "낙찰", "탈락"},
+					"choices": []string{"draft", "submitted", "opened", "evaluated", "awarded", "rejected"},
 				}),
 			},
 			{Slug: "submitted_at", Label: "제출일시", FieldType: schema.FieldDatetime, Width: 3},
