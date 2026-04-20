@@ -132,6 +132,46 @@ func rfqsPreset() Preset {
 	}
 }
 
+// purchaseOrdersPreset — 발주서. rfq/bid/supplier relation fields are added
+// by applyBidRelations after dependent collections exist.
+//
+// subsidiary/subsidiary_name are plain text columns (not relations) because
+// subsidiaries live in auth.subsidiaries (a system table), outside the
+// dynamic schema engine. distributePO writes the subsidiary's UUID and a
+// denormalized name for UI display.
+func purchaseOrdersPreset() Preset {
+	return Preset{
+		Slug:        "purchase_orders",
+		Label:       "발주서",
+		Description: "낙찰 후 계열사별 자동 분배된 발주 내역",
+		Icon:        "package",
+		AccessConfig: &schema.AccessConfig{
+			BidRole: schema.BidRolePO,
+		},
+		Fields: []schema.CreateFieldIn{
+			{Slug: "po_no", Label: "발주번호", FieldType: schema.FieldText, IsRequired: true, IsUnique: true, IsIndexed: true, Width: 3},
+			{Slug: "subsidiary", Label: "계열사 ID", FieldType: schema.FieldText, IsIndexed: true, Width: 3},
+			{Slug: "subsidiary_name", Label: "계열사명", FieldType: schema.FieldText, Width: 3},
+			{Slug: "allocated_amount", Label: "배정금액", FieldType: schema.FieldNumber, Width: 3},
+			{Slug: "allocation_ratio", Label: "배정비율", FieldType: schema.FieldNumber, Width: 3,
+				Options: jsonRaw(map[string]any{"min": 0, "max": 1}),
+			},
+			{
+				Slug:         "status",
+				Label:        "상태",
+				FieldType:    schema.FieldSelect,
+				DefaultValue: jsonRaw("draft"),
+				Width:        3,
+				Options: jsonRaw(map[string]any{
+					"choices": []string{"draft", "confirmed", "shipped", "received", "completed", "cancelled"},
+				}),
+			},
+			{Slug: "po_date", Label: "발주일", FieldType: schema.FieldDatetime, Width: 3},
+			{Slug: "note", Label: "비고", FieldType: schema.FieldTextarea, Width: 6},
+		},
+	}
+}
+
 // bidsPreset — 입찰서. Relation fields to rfqs/suppliers are added by
 // applyBidRelations after both collections exist.
 //

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -40,13 +41,15 @@ var (
 )
 
 // AwardResult describes the outcome of an award computation.
+// When distributePO chains successfully, Distribution is populated.
 type AwardResult struct {
-	RFQID        string   `json:"rfq_id"`
-	EvalMethod   string   `json:"eval_method"`
-	WinnerBidID  string   `json:"winner_bid_id"`
-	WinnerAmount float64  `json:"winner_amount"`
-	TotalBids    int      `json:"total_bids"`
-	RejectedBids []string `json:"rejected_bids"`
+	RFQID        string            `json:"rfq_id"`
+	EvalMethod   string            `json:"eval_method"`
+	WinnerBidID  string            `json:"winner_bid_id"`
+	WinnerAmount float64           `json:"winner_amount"`
+	TotalBids    int               `json:"total_bids"`
+	RejectedBids []string          `json:"rejected_bids"`
+	Distribution *DistributeResult `json:"distribution,omitempty"`
 }
 
 // bidRow is the minimal shape we load for scoring.
@@ -152,14 +155,29 @@ func AwardRFQ(ctx context.Context, pool *pgxpool.Pool, rfqID string) (*AwardResu
 		return nil, fmt.Errorf("commit: %w", err)
 	}
 
-	return &AwardResult{
+	result := &AwardResult{
 		RFQID:        rfqID,
 		EvalMethod:   evalMethod,
 		WinnerBidID:  winnerID,
 		WinnerAmount: winnerAmount,
 		TotalBids:    len(bids),
 		RejectedBids: rejectedIDs,
-	}, nil
+	}
+
+	// Chain: automatically fan out into per-subsidiary POs. Failures here
+	// don't invalidate the award — the admin can retry distribution later.
+	dist, distErr := DistributePO(ctx, pool, rfqID)
+	switch {
+	case distErr == nil:
+		result.Distribution = dist
+	case errors.Is(distErr, ErrAlreadyDistributed):
+		// Idempotent — treat as success without populating Distribution.
+		slog.Info("award: distribution already done", "rfq_id", rfqID)
+	default:
+		slog.Warn("award: distribution failed, awarding anyway", "rfq_id", rfqID, "error", distErr)
+	}
+
+	return result, nil
 }
 
 // loadEligibleBids fetches bids that are still in play for the given RFQ.
