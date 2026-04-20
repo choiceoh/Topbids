@@ -8,10 +8,6 @@ import type { Collection } from '@/lib/types'
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
-vi.mock('@/components/works/TemplateGallery', () => ({
-  default: () => <div data-testid="template-gallery" />,
-}))
-
 vi.mock('@/components/works/AppCard', () => ({
   default: ({ collection }: { collection: Collection }) => (
     <div data-testid="app-card">{collection.label}</div>
@@ -90,7 +86,7 @@ describe('AppListPage', () => {
     renderPage()
 
     await waitFor(() => {
-      expect(screen.getByText('시작하기')).toBeInTheDocument()
+      expect(screen.getByText('앱이 아직 없습니다')).toBeInTheDocument()
     })
   })
 
@@ -142,29 +138,4 @@ describe('AppListPage', () => {
     })
   })
 
-  it('renders template and new collection buttons', async () => {
-    setupDefaultMocks()
-    renderPage()
-
-    await waitFor(() => {
-      expect(screen.getByText('인허가')).toBeInTheDocument()
-    })
-
-    expect(screen.getByText('템플릿')).toBeInTheDocument()
-  })
-
-  it('toggles template gallery', async () => {
-    setupDefaultMocks()
-    const user = userEvent.setup()
-    renderPage()
-
-    await waitFor(() => {
-      expect(screen.getByText('인허가')).toBeInTheDocument()
-    })
-
-    const templateBtn = screen.getByText('템플릿')
-    await user.click(templateBtn)
-
-    expect(screen.getByTestId('template-gallery')).toBeInTheDocument()
-  })
 })

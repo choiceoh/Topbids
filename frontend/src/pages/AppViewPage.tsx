@@ -20,13 +20,11 @@ import {
   ArrowDownUp,
   Bookmark,
   BookmarkPlus,
-  BarChart3,
   Calendar,
   Download,
   FileText,
   Filter,
   Mail,
-  GanttChart,
   LayoutGrid,
   Loader2,
   Pencil,
@@ -67,8 +65,6 @@ import FilterChips from '@/components/works/FilterChips'
 import SortPanel, { type SortItem } from '@/components/works/SortPanel'
 import CalendarView from '@/components/works/views/CalendarView'
 import FormView from '@/components/works/views/FormView'
-import GanttView from '@/components/works/views/GanttView'
-import ChartTabContent from '@/components/works/views/ChartTabContent'
 import KanbanView from '@/components/works/views/KanbanView'
 import ViewGuide from '@/components/works/views/ViewGuide'
 import { Badge } from '@/components/ui/badge'
@@ -96,10 +92,8 @@ import {
   useTotals,
   useUpdateEntry,
 } from '@/hooks/useEntries'
-import { useProcess } from '@/hooks/useProcess'
 import { useSavedViews, useCreateSavedView, useDeleteSavedView } from '@/hooks/useSavedViews'
 import { canManageCollection, useCurrentUser } from '@/hooks/useAuth'
-import { useAutomationRunToasts } from '@/hooks/useAutomationRunToasts'
 import { useConflictAwareUpdate } from '@/hooks/useConflictAwareUpdate'
 import { useRetryToast } from '@/hooks/useRetryToast'
 import { useUndoToast } from '@/hooks/useUndoToast'
@@ -178,12 +172,14 @@ export default function AppViewPage() {
 
   const { data: collection, isLoading: colLoading, isError: colError, error: colErr } =
     useCollection(appId)
-  const { data: process } = useProcess(appId)
+  // Process/automation features are removed. Stubbed with is_enabled=false so
+  // dead-code branches compile without refactor; they will be pruned during the
+  // bid-domain UI pass.
+  const process: import('@/lib/types').Process = {
+    id: '', collection_id: '', is_enabled: false, statuses: [], transitions: [],
+  }
   const { data: currentUser } = useCurrentUser()
   const canManage = canManageCollection(currentUser, collection?.created_by)
-
-  // Show toast when automation runs are detected.
-  useAutomationRunToasts(collection?.id)
 
   // Let the backend auto-expand all relation fields.
   const expand = 'auto'
@@ -598,7 +594,7 @@ export default function AppViewPage() {
     }
   }
 
-  const [, setImportingCSV] = useState(false)
+  const [importingCSV, setImportingCSV] = useState(false)
   const [csvPreviewFile, setCsvPreviewFile] = useState<File | null>(null)
   const [csvPreviewOpen, setCsvPreviewOpen] = useState(false)
 
@@ -645,11 +641,6 @@ export default function AppViewPage() {
     }
   }, [collection, refetch])
 
-  const dateFields = useMemo(
-    () => collection?.fields?.filter((f) => f.field_type === 'date' || f.field_type === 'datetime') ?? [],
-    [collection],
-  )
-
   // Build synthetic field for process status kanban
   const processGroupField = useMemo(() => {
     if (!process?.is_enabled || !process.statuses?.length) return undefined
@@ -678,15 +669,10 @@ export default function AppViewPage() {
   if (!collection) return null
 
   const hasCalendar = !!dateField
-  const hasGantt = dateFields.length >= 1
   const hasProcessKanban = process?.is_enabled && (process.statuses?.length ?? 0) > 0
 
   function handleEntryClick(entry: Record<string, unknown>) {
     navigate(`/apps/${appId}/entries/${entry.id}`)
-  }
-
-  function handleEntryClickById(entryId: string) {
-    navigate(`/apps/${appId}/entries/${entryId}`)
   }
 
   function handleGanttUpdate(entryId: string, updates: Record<string, unknown>) {
@@ -1281,20 +1267,10 @@ export default function AppViewPage() {
           <TabsList className="mb-4 max-w-full overflow-x-auto scrollbar-none">
             <TabsTrigger value="list">목록</TabsTrigger>
             {hasProcessKanban && <TabsTrigger value="status-kanban">상태별</TabsTrigger>}
-            <TabsTrigger value="chart" className="gap-1">
-              <BarChart3 className="h-3.5 w-3.5" />
-              차트
-            </TabsTrigger>
             {hasCalendar && (
               <TabsTrigger value="calendar" className="gap-1">
                 <Calendar className="h-3.5 w-3.5" />
                 캘린더
-              </TabsTrigger>
-            )}
-            {hasGantt && (
-              <TabsTrigger value="gantt" className="gap-1">
-                <GanttChart className="h-3.5 w-3.5" />
-                간트
               </TabsTrigger>
             )}
             <TabsTrigger value="form" className="gap-1">
@@ -1376,12 +1352,6 @@ export default function AppViewPage() {
             </TabsContent>
           )}
 
-          <TabsContent value="chart" className="mt-0">
-            <ErrorBoundary key="chart">
-              <ChartTabContent appId={appId!} collection={collection} />
-            </ErrorBoundary>
-          </TabsContent>
-
           {hasCalendar && dateField && (
             <TabsContent value="calendar" className="mt-0">
               <ErrorBoundary key="calendar">
@@ -1404,19 +1374,6 @@ export default function AppViewPage() {
             </TabsContent>
           )}
 
-
-          {hasGantt && (
-            <TabsContent value="gantt" className="mt-0">
-              <ErrorBoundary key="gantt">
-              <GanttView
-                slug={collection.slug}
-                fields={collection.fields ?? []}
-                onEntryClick={handleEntryClickById}
-                onEntryUpdate={handleGanttUpdate}
-              />
-              </ErrorBoundary>
-            </TabsContent>
-          )}
 
           <TabsContent value="form" className="mt-0">
             <ErrorBoundary key="form">

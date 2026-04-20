@@ -17,7 +17,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/choiceoh/phaeton/backend/internal/ai"
-	"github.com/choiceoh/phaeton/backend/internal/automation"
 	"github.com/choiceoh/phaeton/backend/internal/config"
 	"github.com/choiceoh/phaeton/backend/internal/db"
 	"github.com/choiceoh/phaeton/backend/internal/events"
@@ -123,12 +122,6 @@ func run() int {
 	aiClient := ai.NewClient(appCfg.AI)
 	aiHandler := handler.NewAIHandler(aiClient, store, pool, cache)
 
-	// Charts handler.
-	chartHandler := handler.NewChartHandler(store)
-
-	// Template export/import handler.
-	templateHandler := handler.NewTemplateHandler(store, cache, migEngine, pool)
-
 	// SSE real-time events.
 	sseBroker := events.NewBroker()
 	sseHandler := handler.NewSSEHandler(sseBroker)
@@ -153,14 +146,9 @@ func run() int {
 	notifHandler := handler.NewNotificationHandler(pool)
 	handler.SubscribeNotifications(pool, bus, cache)
 
-	// Automation engine.
+	// Worker pool retained for future background tasks (bid scheduler, etc.).
 	wp := workerpool.New(0)
-	autoEngine := automation.New(pool, cache, wp)
-	autoEngine.Subscribe(bus)
-	autoHandler := handler.NewAutomationHandler(pool)
-
-	// Automation scheduler (for cron-based triggers, checks every minute).
-	autoScheduler := automation.NewScheduler(autoEngine, 1*time.Minute)
+	_ = wp
 
 	// Login rate limiter: 5 failures / 15 minutes → 30 minute lockout.
 	loginLimiter := middleware.NewRateLimiter(5, 15*60*1000, 30*60*1000)
@@ -228,9 +216,6 @@ func run() int {
 		commentH:      commentHandler,
 		notifH:        notifHandler,
 		aiH:           aiHandler,
-		autoH:         autoHandler,
-		chartH:        chartHandler,
-		templateH:     templateHandler,
 		sseH:          sseHandler,
 		reportH:       reportHandler,
 		logger:        logger,
@@ -261,10 +246,8 @@ func run() int {
 			return fmt.Errorf("listen: %w", err)
 		}
 
-		// Start sync runner and automation scheduler in background.
+		// Start sync runner in background.
 		go syncRunner.Start(ctx)
-		autoEngine.SetBaseContext(ctx)
-		autoScheduler.Start(ctx)
 
 		logging.PrintBanner(os.Stderr, logging.BannerInfo{
 			Version: version,
@@ -282,7 +265,6 @@ func run() int {
 
 			// Stop background workers before draining HTTP connections.
 			// syncRunner stops automatically via ctx cancellation.
-			autoScheduler.Stop()
 			sseBroker.Close()
 			wp.Wait()
 			logger.Info("background workers stopped")
@@ -313,9 +295,6 @@ type routerConfig struct {
 	commentH      *handler.CommentHandler
 	notifH        *handler.NotificationHandler
 	aiH           *handler.AIHandler
-	autoH         *handler.AutomationHandler
-	chartH        *handler.ChartHandler
-	templateH     *handler.TemplateHandler
 	sseH          *handler.SSEHandler
 	reportH       *handler.ReportHandler
 	logger        *slog.Logger
@@ -446,9 +425,6 @@ func buildRouter(cfg routerConfig) *chi.Mux {
 				r.Put("/collections/{id}/process", cfg.schemaH.SaveProcess)
 
 				r.Post("/collections/{id}/fields", cfg.schemaH.AddField)
-
-				// Template export.
-				r.Get("/collections/{id}/export", cfg.templateH.ExportCollection)
 			})
 
 			// Field update/delete: director/pm OR the field's collection creator.
@@ -458,11 +434,10 @@ func buildRouter(cfg routerConfig) *chi.Mux {
 				r.Delete("/fields/{fieldId}", cfg.schemaH.DeleteField)
 			})
 
-			// Migration rollback & template import: director/pm only.
+			// Migration rollback: director/pm only.
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireRole("director", "pm"))
 				r.Post("/migrations/rollback/{migrationId}", cfg.schemaH.RollbackMigration)
-				r.Post("/templates/import", cfg.templateH.ImportTemplate)
 			})
 
 			// Collection members
@@ -483,22 +458,6 @@ func buildRouter(cfg routerConfig) *chi.Mux {
 			r.Patch("/saved-views/{savedViewId}", cfg.savedViewH.UpdateSavedView)
 			r.Delete("/saved-views/{savedViewId}", cfg.savedViewH.DeleteSavedView)
 
-			// Automations: director and pm only.
-			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequireRole("director", "pm"))
-				r.Get("/collections/{id}/automations", cfg.autoH.List)
-				r.Post("/collections/{id}/automations", cfg.autoH.Create)
-				r.Get("/automations/{automationId}", cfg.autoH.Get)
-				r.Patch("/automations/{automationId}", cfg.autoH.Update)
-				r.Delete("/automations/{automationId}", cfg.autoH.Delete)
-				r.Get("/automations/{automationId}/runs", cfg.autoH.ListRuns)
-			})
-
-			// Charts
-			r.Get("/collections/{id}/charts", cfg.chartH.List)
-			r.Post("/collections/{id}/charts", cfg.chartH.Create)
-			r.Patch("/charts/{chartId}", cfg.chartH.Update)
-			r.Delete("/charts/{chartId}", cfg.chartH.Delete)
 		})
 
 		// Dynamic API — auto-generated CRUD for data tables.
@@ -546,17 +505,10 @@ func buildRouter(cfg routerConfig) *chi.Mux {
 		r.Get("/api/uploads/{filename}", handler.ServeUpload)
 
 		// AI endpoints — longer write deadline for LLM inference.
+		// Only site-usage chat remains after the Topbids refactor.
 		r.Route("/api/ai", func(ai chi.Router) {
 			ai.Get("/health", cfg.aiH.HealthCheck)
-			ai.Post("/build-collection", cfg.aiH.BuildCollection)
 			ai.Post("/chat", cfg.aiH.Chat)
-			ai.Post("/generate-slug", cfg.aiH.GenerateSlug)
-			ai.Post("/build-automation/{id}", cfg.aiH.BuildAutomation)
-			ai.Post("/build-formula/{slug}", cfg.aiH.BuildFormula)
-			ai.Post("/build-filter/{slug}", cfg.aiH.BuildFilter)
-			ai.Post("/prefill/{slug}", cfg.aiH.Prefill)
-			ai.Post("/map-csv-columns/{slug}", cfg.aiH.MapCSVColumns)
-			ai.Post("/build-chart/{id}", cfg.aiH.BuildChart)
 		})
 
 		// Notifications

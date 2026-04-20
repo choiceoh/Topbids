@@ -21,7 +21,6 @@ import {
   useEntryDefaults,
   useUpdateEntry,
 } from '@/hooks/useEntries'
-import { useProcess } from '@/hooks/useProcess'
 import { useConflictAwareUpdate } from '@/hooks/useConflictAwareUpdate'
 import { useRetryToast } from '@/hooks/useRetryToast'
 import { formatError } from '@/lib/api'
@@ -39,7 +38,6 @@ export default function EntryPage() {
   // Data fetching
   const { data: collection, isLoading: colLoading, error: colErr } = useCollection(appId)
   const slug = collection?.slug
-  const { data: process } = useProcess(appId)
   const { data: entryData, isLoading: entryLoading, refetch: refetchEntry } = useEntry(
     slug,
     entryId,
@@ -246,7 +244,6 @@ export default function EntryPage() {
             onSubmit={handleSubmit}
             onCancel={goBack}
             submitting={createEntry.isPending || updateEntry.isPending}
-            process={process}
           />
         </div>
 
