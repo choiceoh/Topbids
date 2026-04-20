@@ -133,9 +133,12 @@ func (h *DynHandler) List(w http.ResponseWriter, r *http.Request) {
 	args = append(args, searchArgs...)
 
 	// Row-level security: restrict row visibility based on collection's rls_mode.
+	// Supplier-role users skip the generic viewer RLS — the bid-domain
+	// supplier filter below replaces it with a column-specific restriction.
 	rlsClause := ""
 	colRole := middleware.GetCollectionRole(r.Context())
-	if colRole == "viewer" {
+	user, _ := middleware.GetUser(r.Context())
+	if colRole == "viewer" && user.Role != "supplier" {
 		rlsClause = buildRLSClause(r, col, &args, func() string {
 			if len(sortJoins) > 0 {
 				return qTable
@@ -144,13 +147,24 @@ func (h *DynHandler) List(w http.ResponseWriter, r *http.Request) {
 		}())
 	}
 
+	// Topbids supplier row filter: suppliers on a bids or purchase_orders
+	// collection see only rows where the "supplier" column matches their
+	// own SupplierID.
+	supplierClause := ""
+	if col.AccessConfig.BidRole == schema.BidRoleBid || col.AccessConfig.BidRole == schema.BidRolePO {
+		if sql, bidArgs, active := bid.SupplierRowFilter(user.Role, user.SupplierID, len(args)+1); active {
+			supplierClause = " AND " + sql
+			args = append(args, bidArgs...)
+		}
+	}
+
 	// Count total. Sort joins are not needed for COUNT, but we use the same
 	// WHERE prefix to keep parameter ordering consistent.
 	deletedClause := "deleted_at IS NULL"
 	if len(sortJoins) > 0 {
 		deletedClause = fmt.Sprintf("%s.deleted_at IS NULL", qTable)
 	}
-	countSQL := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s %s%s", qTable, deletedClause, where, rlsClause)
+	countSQL := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s %s%s%s", qTable, deletedClause, where, rlsClause, supplierClause)
 	var total int64
 	if err := h.pool.QueryRow(r.Context(), countSQL, args...).Scan(&total); err != nil {
 		handleErr(w, r, err)
@@ -173,8 +187,8 @@ func (h *DynHandler) List(w http.ResponseWriter, r *http.Request) {
 	} else {
 		selectCols = buildSelectCols(fields, procEnabled, &selectColOpts{cache: h.cache})
 	}
-	dataSQL := fmt.Sprintf("SELECT %s FROM %s%s WHERE %s %s%s %s LIMIT %d OFFSET %d",
-		selectCols, qTable, joinClause, deletedClause, where, rlsClause, orderBy, limit, offset)
+	dataSQL := fmt.Sprintf("SELECT %s FROM %s%s WHERE %s %s%s%s %s LIMIT %d OFFSET %d",
+		selectCols, qTable, joinClause, deletedClause, where, rlsClause, supplierClause, orderBy, limit, offset)
 
 	rows, err := h.pool.Query(r.Context(), dataSQL, args...)
 	if err != nil {
@@ -244,13 +258,26 @@ func (h *DynHandler) Get(w http.ResponseWriter, r *http.Request) {
 	selectCols := buildSelectCols(fields, procEnabled, &selectColOpts{cache: h.cache})
 
 	// RLS: restrict row visibility based on collection's rls_mode.
+	// Mirror of List handler: supplier role skips generic RLS on bid-domain
+	// collections; SupplierRowFilter below handles it more precisely.
 	getArgs := []any{id}
 	rlsGet := ""
-	if colRole := middleware.GetCollectionRole(r.Context()); colRole == "viewer" {
+	colRole := middleware.GetCollectionRole(r.Context())
+	user, _ := middleware.GetUser(r.Context())
+	if colRole == "viewer" && user.Role != "supplier" {
 		rlsGet = buildRLSClause(r, col, &getArgs, "")
 	}
 
-	getSQL := fmt.Sprintf("SELECT %s FROM %s WHERE id = $1 AND deleted_at IS NULL%s", selectCols, qTable, rlsGet)
+	// Topbids supplier row filter (mirror of List handler).
+	supplierGet := ""
+	if col.AccessConfig.BidRole == schema.BidRoleBid || col.AccessConfig.BidRole == schema.BidRolePO {
+		if sql, bidArgs, active := bid.SupplierRowFilter(user.Role, user.SupplierID, len(getArgs)+1); active {
+			supplierGet = " AND " + sql
+			getArgs = append(getArgs, bidArgs...)
+		}
+	}
+
+	getSQL := fmt.Sprintf("SELECT %s FROM %s WHERE id = $1 AND deleted_at IS NULL%s%s", selectCols, qTable, rlsGet, supplierGet)
 
 	rows, err := h.pool.Query(r.Context(), getSQL, getArgs...)
 	if err != nil {

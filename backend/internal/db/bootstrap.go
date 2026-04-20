@@ -95,6 +95,11 @@ func Bootstrap(ctx context.Context, pool *pgxpool.Pool) error {
 		`ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS phone          VARCHAR(31)`,
 		`ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS avatar         TEXT`,
 		`ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS joined_at      DATE`,
+		// Topbids: link supplier-role users to a row in data.suppliers.
+		// Plain UUID (no FK) because data.suppliers is a dynamic collection
+		// whose table is created by the schema engine after bootstrap runs.
+		`ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS supplier_id    UUID`,
+		`CREATE INDEX IF NOT EXISTS idx_auth_users_supplier ON auth.users(supplier_id)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_users_external_id
 		     ON auth.users(external_id) WHERE external_id IS NOT NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_auth_users_department ON auth.users(department_id)`,
