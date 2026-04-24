@@ -69,13 +69,19 @@ export default function UserFormDialog({ user, departments, subsidiaries, onClos
   const createUser = useCreateUser()
   const updateUser = useUpdateUser()
 
+  // This dialog only manages internal roles. Supplier accounts are provisioned
+  // separately (seed/scripted) — if somehow opened on a supplier, coerce to
+  // the safest default so the select has a valid initial value.
+  const initialRole: 'director' | 'pm' | 'engineer' | 'viewer' =
+    user?.role === 'supplier' ? 'viewer' : user?.role ?? 'viewer'
+
   const form = useForm<CreateForm | EditForm>({
     resolver: zodResolver(isEdit ? editSchema : createSchema),
     defaultValues: {
       email: user?.email ?? '',
       name: user?.name ?? '',
       password: '',
-      role: user?.role ?? 'viewer',
+      role: initialRole,
       subsidiary_id: user?.subsidiary_id ?? NONE,
       department_id: user?.department_id ?? NONE,
       position: user?.position ?? '',

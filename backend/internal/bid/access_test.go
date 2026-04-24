@@ -304,3 +304,40 @@ func TestToTime(t *testing.T) {
 		t.Error("nil should not parse")
 	}
 }
+
+// --- IsRowOpened ---
+
+func TestIsRowOpened_StatusInUnlockList(t *testing.T) {
+	fields := []schema.Field{sealedField("amount", "", "opened", "awarded")}
+
+	if !IsRowOpened(fields, map[string]any{"status": "opened"}, "status") {
+		t.Error("status=opened should report row as opened")
+	}
+	if !IsRowOpened(fields, map[string]any{"status": "awarded"}, "status") {
+		t.Error("status=awarded should report row as opened")
+	}
+}
+
+func TestIsRowOpened_StatusNotInList(t *testing.T) {
+	fields := []schema.Field{sealedField("amount", "", "opened")}
+	if IsRowOpened(fields, map[string]any{"status": "submitted"}, "status") {
+		t.Error("status=submitted should NOT report row as opened")
+	}
+}
+
+func TestIsRowOpened_NoSealedFields(t *testing.T) {
+	fields := []schema.Field{plainField("name")}
+	if IsRowOpened(fields, map[string]any{"status": "opened"}, "status") {
+		t.Error("collections without sealed fields should never report opened")
+	}
+}
+
+func TestIsRowOpened_MissingStatus(t *testing.T) {
+	fields := []schema.Field{sealedField("amount", "", "opened")}
+	if IsRowOpened(fields, map[string]any{}, "status") {
+		t.Error("missing status should NOT report opened")
+	}
+	if IsRowOpened(fields, map[string]any{"status": nil}, "status") {
+		t.Error("nil status should NOT report opened")
+	}
+}

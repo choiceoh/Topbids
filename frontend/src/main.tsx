@@ -6,6 +6,7 @@ import { createBrowserRouter, RouterProvider } from 'react-router'
 import { ErrorBoundary } from './components/common/ErrorBoundary'
 import { OfflineBanner } from './components/common/OfflineBanner'
 import { Toaster } from './components/ui/sonner'
+import PortalLayout from './layouts/PortalLayout'
 import RootLayout from './layouts/RootLayout'
 import { queryClient } from './lib/queryClient'
 import AIChatPage from './pages/AIChatPage'
@@ -18,6 +19,10 @@ import LoginPage from './pages/LoginPage'
 import MyTasksPage from './pages/MyTasksPage'
 import NotFoundPage from './pages/NotFoundPage'
 import OrgChartPage from './pages/OrgChartPage'
+import PortalBidHistoryPage from './pages/portal/PortalBidHistoryPage'
+import PortalBidSubmitPage from './pages/portal/PortalBidSubmitPage'
+import PortalLoginPage from './pages/portal/PortalLoginPage'
+import PortalRfqListPage from './pages/portal/PortalRfqListPage'
 import ProfilePage from './pages/ProfilePage'
 import SettingsPage from './pages/SettingsPage'
 import UsersPage from './pages/UsersPage'
@@ -29,6 +34,20 @@ const router = createBrowserRouter([
   {
     path: '/login',
     element: <LoginPage />,
+  },
+  {
+    path: '/portal/login',
+    element: <PortalLoginPage />,
+  },
+  {
+    path: '/portal',
+    element: <PortalLayout />,
+    children: [
+      { index: true, element: <EB><PortalRfqListPage /></EB> },
+      { path: 'rfqs/:rfqId/bid', element: <EB><PortalBidSubmitPage /></EB> },
+      { path: 'history', element: <EB><PortalBidHistoryPage /></EB> },
+      { path: '*', element: <NotFoundPage /> },
+    ],
   },
   {
     element: <RootLayout />,

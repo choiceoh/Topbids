@@ -144,6 +144,19 @@ func DistributePO(ctx context.Context, pool *pgxpool.Pool, rfqID string) (*Distr
 		return nil, fmt.Errorf("commit: %w", err)
 	}
 
+	LogEvent(ctx, pool, AuditEntry{
+		ActorName: "distribute-po",
+		Action:    ActionDistribute,
+		AppSlug:   "purchase_orders",
+		RowID:     rfqID, // reference anchor — purchase_orders rows are listed in Detail
+		Detail: map[string]any{
+			"winner_bid_id":     winnerID,
+			"total_amount":      totalAmount,
+			"subsidiary_count":  len(subs),
+			"purchase_order_ids": createdIDs,
+		},
+	})
+
 	return &DistributeResult{
 		RFQID:            rfqID,
 		WinnerBidID:      winnerID,

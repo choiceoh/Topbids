@@ -378,6 +378,30 @@ func Bootstrap(ctx context.Context, pool *pgxpool.Pool) error {
 		`CREATE INDEX IF NOT EXISTS idx_webhook_events_topic_time ON _meta.webhook_events(topic, received_at DESC)`,
 	)
 
+	// --- Topbids bid audit log (append-only compliance trail) ---
+	// Record sealed-bid read attempts, submissions, scheduler opens, awards.
+	// No UPDATE or DELETE grants at the application layer — callers only INSERT.
+	// actor_id is nullable so background jobs (scheduler) can record without a user.
+	stmts = append(stmts,
+		`CREATE TABLE IF NOT EXISTS _meta.bid_audit_log (
+			id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			actor_id    UUID,
+			actor_name  VARCHAR(255) NOT NULL DEFAULT '',
+			action      VARCHAR(31) NOT NULL,
+			app_slug    VARCHAR(63) NOT NULL,
+			row_id      UUID,
+			ip          INET,
+			detail      JSONB NOT NULL DEFAULT '{}',
+			created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_bid_audit_log_time
+		     ON _meta.bid_audit_log(created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_bid_audit_log_app_row
+		     ON _meta.bid_audit_log(app_slug, row_id) WHERE row_id IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_bid_audit_log_actor
+		     ON _meta.bid_audit_log(actor_id, created_at DESC) WHERE actor_id IS NOT NULL`,
+	)
+
 	// --- incremental schema evolution (safe for existing deployments) ---
 	alters := []string{
 		`ALTER TABLE _meta.collections ADD COLUMN IF NOT EXISTS process_enabled BOOLEAN NOT NULL DEFAULT FALSE`,

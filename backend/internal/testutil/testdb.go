@@ -174,8 +174,14 @@ func truncate(t *testing.T, pool *pgxpool.Pool) {
 		"_meta.relations",
 		"_meta.fields",
 		"_meta.collections",
+		// Topbids audit trail — must reset so tests don't see residue from
+		// earlier runs when asserting row counts.
+		"_meta.bid_audit_log",
 		"auth.users",
 		"auth.departments",
+		// Subsidiaries drive DistributePO fan-out; each test should control
+		// its own subsidiary set.
+		"auth.subsidiaries",
 	}
 	trunc := fmt.Sprintf("TRUNCATE %s CASCADE", joinComma(metaTables))
 	if _, err := pool.Exec(ctx, trunc); err != nil {

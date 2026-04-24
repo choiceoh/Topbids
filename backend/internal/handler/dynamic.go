@@ -319,6 +319,22 @@ func (h *DynHandler) Get(w http.ResponseWriter, r *http.Request) {
 	if col.AccessConfig.BidRole == schema.BidRoleBid {
 		user, _ := middleware.GetUser(r.Context())
 		bid.MaskSealedFields(fields, records[0], "status", user.Role, time.Now())
+
+		// Audit: single-record Get on a bid is the compliance-relevant event.
+		// List is intentionally not logged — too noisy and not row-specific.
+		action := bid.ActionReadSealed
+		if bid.IsRowOpened(fields, records[0], "status") {
+			action = bid.ActionReadOpened
+		}
+		recID, _ := records[0]["id"].(string)
+		bid.LogEvent(r.Context(), h.pool, bid.AuditEntry{
+			ActorID:   user.UserID,
+			ActorName: user.Name,
+			Action:    action,
+			AppSlug:   col.Slug,
+			RowID:     recID,
+			IP:        clientIP(r),
+		})
 	}
 
 	// Optional display formatting.
@@ -479,6 +495,21 @@ func (h *DynHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if recID, ok := records[0]["id"].(string); ok {
 		diff := createDiff(records[0], fields)
 		recordChange(r.Context(), h.pool, col.ID, recID, user.UserID, user.Name, "create", diff)
+	}
+
+	// Topbids: audit trail for bid submissions. Scoped to collections flagged
+	// bidRole=bid so generic inserts elsewhere don't clutter the log.
+	if col.AccessConfig.BidRole == schema.BidRoleBid {
+		if recID, ok := records[0]["id"].(string); ok {
+			bid.LogEvent(r.Context(), h.pool, bid.AuditEntry{
+				ActorID:   user.UserID,
+				ActorName: user.Name,
+				Action:    bid.ActionSubmit,
+				AppSlug:   col.Slug,
+				RowID:     recID,
+				IP:        clientIP(r),
+			})
+		}
 	}
 
 	// Resolve computed fields for the created record.

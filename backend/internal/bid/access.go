@@ -87,6 +87,32 @@ func MaskSealedFields(
 	}
 }
 
+// IsRowOpened reports whether the row's status value matches the unlock list
+// of any sealed field on this collection. Used by audit logging to distinguish
+// reads against still-sealed rows ('read_sealed') from reads after the RFQ
+// was opened ('read_opened'), independent of the caller's role.
+//
+// Returns false if no sealed fields exist or if no UnlockByStatus is configured
+// — i.e. audit callers should default to 'read_sealed' in ambiguous cases.
+func IsRowOpened(fields []schema.Field, row map[string]any, statusField string) bool {
+	status := statusAsString(row, statusField)
+	if status == "" {
+		return false
+	}
+	for i := range fields {
+		opts, err := schema.ExtractSealedOptions(fields[i].Options)
+		if err != nil || opts == nil {
+			continue
+		}
+		for _, s := range opts.UnlockByStatus {
+			if s == status {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // shouldMaskField reports whether a single field should be masked for the
 // given caller/row context. Returns (masked, reason) where reason describes
 // the unlock-miss for audit logs (not shown to end users).
