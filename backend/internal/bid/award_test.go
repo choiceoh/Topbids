@@ -156,3 +156,42 @@ func TestScoreOf_ZeroAmountIsSafe(t *testing.T) {
 		t.Errorf("got %v, want 16", s)
 	}
 }
+
+func TestApplyMinWinFloor_DropsLowballBids(t *testing.T) {
+	// 예정가 1억 · 하한율 80% → 8천만 원 미만 bid는 실격.
+	estimated := 100_000_000.0
+	rate := 0.80
+	bids := []bidRow{
+		{id: "low", totalAmount: 70_000_000},
+		{id: "ok1", totalAmount: 85_000_000},
+		{id: "ok2", totalAmount: 90_000_000},
+		{id: "zero", totalAmount: 0},
+	}
+	out := applyMinWinFloor(bids, &estimated, &rate)
+	if len(out) != 2 {
+		t.Fatalf("want 2 survivors, got %d", len(out))
+	}
+	for _, b := range out {
+		if b.id == "low" || b.id == "zero" {
+			t.Errorf("bid %s should have been filtered out", b.id)
+		}
+	}
+}
+
+func TestApplyMinWinFloor_InactiveWithoutConfig(t *testing.T) {
+	bids := []bidRow{{id: "a", totalAmount: 100}}
+	// nil config → opt-in feature stays off.
+	if out := applyMinWinFloor(bids, nil, nil); len(out) != 1 {
+		t.Error("nil configs should leave bids unchanged")
+	}
+	zero := 0.0
+	rate := 0.80
+	if out := applyMinWinFloor(bids, &zero, &rate); len(out) != 1 {
+		t.Error("zero estimated_price should leave bids unchanged")
+	}
+	est := 1_000.0
+	zeroRate := 0.0
+	if out := applyMinWinFloor(bids, &est, &zeroRate); len(out) != 1 {
+		t.Error("zero rate should leave bids unchanged")
+	}
+}

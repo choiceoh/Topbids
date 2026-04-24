@@ -25,17 +25,35 @@ func (r *stubRow) Scan(dest ...any) error {
 		return errors.New("stubRow: Scan arity mismatch")
 	}
 	for i, d := range dest {
-		// Only support *string here; all EnforceBidWriteOwnership queries
-		// scan into strings, so keeping this minimal is fine.
-		sp, ok := d.(*string)
-		if !ok {
+		// Support *string (most queries), **string for nullable columns via
+		// dereferenced nil, and **float64 for MIN aggregates.
+		switch target := d.(type) {
+		case *string:
+			sv, ok := r.values[i].(string)
+			if !ok {
+				return errors.New("stubRow: non-string value staged")
+			}
+			*target = sv
+		case **float64:
+			// Handle three staging shapes for nullable MIN() results:
+			// untyped nil (SQL NULL), a typed *float64 (already-pointer
+			// value), or a raw float64 (non-null case).
+			if r.values[i] == nil {
+				*target = nil
+				continue
+			}
+			if p, ok := r.values[i].(*float64); ok {
+				*target = p
+				continue
+			}
+			f, ok := r.values[i].(float64)
+			if !ok {
+				return errors.New("stubRow: non-float value staged for **float64")
+			}
+			*target = &f
+		default:
 			return errors.New("stubRow: unsupported Scan dest type")
 		}
-		sv, ok := r.values[i].(string)
-		if !ok {
-			return errors.New("stubRow: non-string value staged")
-		}
-		*sp = sv
 	}
 	return nil
 }
@@ -95,7 +113,7 @@ func TestEnforceBidWriteOwnership_CreateForcesSupplierOverride(t *testing.T) {
 		"supplier": "forged-other-supplier-id",
 	}
 	q := &fakeQuerier{rows: []*stubRow{
-		{values: []any{RFQStatusPublished}}, // rfq status query
+		{values: []any{RFQStatusPublished, "open"}}, // rfq status query
 	}}
 	err := EnforceBidWriteOwnership(context.Background(), q, "supplier", "sup-real", OpCreate, "", body)
 	if err != nil {
@@ -109,7 +127,7 @@ func TestEnforceBidWriteOwnership_CreateForcesSupplierOverride(t *testing.T) {
 func TestEnforceBidWriteOwnership_CreateBlockedOnClosedRFQ(t *testing.T) {
 	body := map[string]any{"rfq": "rfq-id"}
 	q := &fakeQuerier{rows: []*stubRow{
-		{values: []any{RFQStatusClosed}}, // past deadline — no new submissions
+		{values: []any{RFQStatusClosed, "open"}}, // past deadline — no new submissions
 	}}
 	err := EnforceBidWriteOwnership(context.Background(), q, "supplier", "sup-1", OpCreate, "", body)
 	if !errors.Is(err, ErrRFQNotAcceptingBids) {
@@ -132,7 +150,7 @@ func TestEnforceBidWriteOwnership_UpdateRejectsForeignRow(t *testing.T) {
 func TestEnforceBidWriteOwnership_UpdateAllowsOwnRowDuringPublished(t *testing.T) {
 	q := &fakeQuerier{rows: []*stubRow{
 		{values: []any{"sup-1", "rfq-id"}},  // own bid
-		{values: []any{RFQStatusPublished}}, // RFQ still accepting
+		{values: []any{RFQStatusPublished, "open"}}, // RFQ still accepting
 	}}
 	err := EnforceBidWriteOwnership(context.Background(), q, "supplier", "sup-1", OpUpdate, "bid-1", nil)
 	if err != nil {
@@ -145,7 +163,7 @@ func TestEnforceBidWriteOwnership_DeleteAfterOpenIsBlocked(t *testing.T) {
 	// retract — preserves audit integrity.
 	q := &fakeQuerier{rows: []*stubRow{
 		{values: []any{"sup-1", "rfq-id"}},
-		{values: []any{RFQStatusOpened}},
+		{values: []any{RFQStatusOpened, "open"}},
 	}}
 	err := EnforceBidWriteOwnership(context.Background(), q, "supplier", "sup-1", OpDelete, "bid-1", nil)
 	if !errors.Is(err, ErrRFQNotAcceptingBids) {
@@ -177,7 +195,7 @@ func TestEnforceBidWriteOwnership_CreateStripsForbiddenFields(t *testing.T) {
 		"status":       "awarded", // forbidden (status transitions are server-side)
 	}
 	q := &fakeQuerier{rows: []*stubRow{
-		{values: []any{RFQStatusPublished}},
+		{values: []any{RFQStatusPublished, "open"}},
 	}}
 	if err := EnforceBidWriteOwnership(context.Background(), q, "supplier", "sup-1", OpCreate, "", body); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -199,7 +217,7 @@ func TestEnforceBidWriteOwnership_UpdateStripsForbiddenFields(t *testing.T) {
 	}
 	q := &fakeQuerier{rows: []*stubRow{
 		{values: []any{"sup-1", "rfq-id"}},
-		{values: []any{RFQStatusPublished}},
+		{values: []any{RFQStatusPublished, "open"}},
 	}}
 	if err := EnforceBidWriteOwnership(context.Background(), q, "supplier", "sup-1", OpUpdate, "bid-1", body); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -209,6 +227,56 @@ func TestEnforceBidWriteOwnership_UpdateStripsForbiddenFields(t *testing.T) {
 	}
 	if body["note"] != "meh" {
 		t.Error("note should be preserved")
+	}
+}
+
+func TestEnforceBidWriteOwnership_AuctionRejectsTieOrAbove(t *testing.T) {
+	// Auction: new amount must be strictly lower than current best (900,000).
+	body := map[string]any{"rfq": "rfq-id", "total_amount": 900_000.0}
+	q := &fakeQuerier{rows: []*stubRow{
+		{values: []any{RFQStatusPublished, "auction"}}, // rfq status+mode
+		{values: []any{900_000.0}},                     // MIN(total_amount)
+	}}
+	err := EnforceBidWriteOwnership(context.Background(), q, "supplier", "sup-1", OpCreate, "", body)
+	if !errors.Is(err, ErrAuctionUndercut) {
+		t.Errorf("equal price should be rejected, got %v", err)
+	}
+}
+
+func TestEnforceBidWriteOwnership_AuctionAcceptsStrictUndercut(t *testing.T) {
+	body := map[string]any{"rfq": "rfq-id", "total_amount": 800_000.0}
+	q := &fakeQuerier{rows: []*stubRow{
+		{values: []any{RFQStatusPublished, "auction"}},
+		{values: []any{900_000.0}},
+	}}
+	if err := EnforceBidWriteOwnership(context.Background(), q, "supplier", "sup-1", OpCreate, "", body); err != nil {
+		t.Errorf("strict undercut should pass, got %v", err)
+	}
+}
+
+func TestEnforceBidWriteOwnership_AuctionFirstBidHasNoFloor(t *testing.T) {
+	// No prior bids → MIN returns NULL (nil *float64 in our stub). First bid accepts any positive.
+	body := map[string]any{"rfq": "rfq-id", "total_amount": 1_000_000.0}
+	var nilFloat *float64
+	q := &fakeQuerier{rows: []*stubRow{
+		{values: []any{RFQStatusPublished, "auction"}},
+		{values: []any{nilFloat}},
+	}}
+	if err := EnforceBidWriteOwnership(context.Background(), q, "supplier", "sup-1", OpCreate, "", body); err != nil {
+		t.Errorf("first auction bid should be accepted, got %v", err)
+	}
+}
+
+func TestEnforceBidWriteOwnership_AuctionClosedStillRejected(t *testing.T) {
+	// Auction in closed status rejects like any other mode — undercut rule
+	// is only relevant while RFQ is still accepting submissions.
+	body := map[string]any{"rfq": "rfq-id", "total_amount": 1.0}
+	q := &fakeQuerier{rows: []*stubRow{
+		{values: []any{RFQStatusClosed, "auction"}},
+	}}
+	err := EnforceBidWriteOwnership(context.Background(), q, "supplier", "sup-1", OpCreate, "", body)
+	if !errors.Is(err, ErrRFQNotAcceptingBids) {
+		t.Errorf("closed auction must reject: got %v", err)
 	}
 }
 

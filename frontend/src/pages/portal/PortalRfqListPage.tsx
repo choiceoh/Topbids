@@ -44,13 +44,27 @@ export default function PortalRfqListPage() {
         '/data/rfqs?sort=-deadline_at&limit=50&_filter=' +
           encodeURIComponent(
             JSON.stringify({
-              op: 'or',
+              op: 'and',
               conditions: [
-                { field: 'status', op: 'eq', value: 'published' },
-                { field: 'status', op: 'eq', value: 'closed' },
-                { field: 'status', op: 'eq', value: 'opened' },
-                { field: 'status', op: 'eq', value: 'evaluating' },
-                { field: 'status', op: 'eq', value: 'awarded' },
+                // Exclude template shells — they're draft containers used
+                // by buyers to duplicate from, never meant to be bid on.
+                {
+                  op: 'or',
+                  conditions: [
+                    { field: 'is_template', op: 'is_null' },
+                    { field: 'is_template', op: 'eq', value: 'false' },
+                  ],
+                },
+                {
+                  op: 'or',
+                  conditions: [
+                    { field: 'status', op: 'eq', value: 'published' },
+                    { field: 'status', op: 'eq', value: 'closed' },
+                    { field: 'status', op: 'eq', value: 'opened' },
+                    { field: 'status', op: 'eq', value: 'evaluating' },
+                    { field: 'status', op: 'eq', value: 'awarded' },
+                  ],
+                },
               ],
             }),
           ),
@@ -91,6 +105,11 @@ export default function PortalRfqListPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <Badge variant={variant}>{label}</Badge>
+                      {typeof rfq.amendment_count === 'number' && rfq.amendment_count > 0 && (
+                        <Badge variant="outline" className="border-amber-500/60 text-amber-700">
+                          변경 {rfq.amendment_count}회
+                        </Badge>
+                      )}
                       <span className="text-xs text-muted-foreground">
                         {String(rfq.rfq_no ?? '')}
                       </span>
@@ -123,10 +142,10 @@ export default function PortalRfqListPage() {
                     {submittable ? (
                       <>
                         <Link
-                          to={`/portal/rfqs/${String(rfq.id)}/bid`}
+                          to={`/portal/rfqs/${String(rfq.id)}/${rfq.mode === 'auction' ? 'auction' : 'bid'}`}
                           className="inline-flex items-center rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-white hover:bg-foreground/90"
                         >
-                          입찰서 제출
+                          {rfq.mode === 'auction' ? '역경매 참여' : '입찰서 제출'}
                         </Link>
                         <span className="text-[11px] text-muted-foreground">
                           {formatDeadlineRelative(rfq.deadline_at)}

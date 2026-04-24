@@ -13,11 +13,14 @@ import (
 // Runtime enforcement (SealedReadFilter, scheduler, award/PO actions) only
 // activates for collections with a non-empty BidRole. See docs/10-BID-EXTENSION.md.
 const (
-	BidRoleRfq      = "rfq"      // RFQ announcement collection (공고)
-	BidRoleBid      = "bid"      // Bid submission — triggers sealed row filter (입찰서)
-	BidRoleSupplier = "supplier" // Supplier registry (공급사)
-	BidRoleAward    = "award"    // Award decision (낙찰)
-	BidRolePO       = "po"       // Purchase order (발주)
+	BidRoleRfq        = "rfq"         // RFQ announcement collection (공고)
+	BidRoleBid        = "bid"         // Bid submission — triggers sealed row filter (입찰서)
+	BidRoleSupplier   = "supplier"    // Supplier registry (공급사)
+	BidRoleAward      = "award"       // Award decision (낙찰)
+	BidRolePO         = "po"          // Purchase order (발주)
+	BidRoleRfqClarify = "rfq_clarify" // Q&A thread against an RFQ (입찰 Q&A)
+	BidRolePQ         = "pq"          // Supplier pre-qualification record (PQ 심사)
+	BidRoleEvaluation = "evaluation"  // Per-evaluator tech scoring (다중 평가)
 )
 
 // validBidRoles enumerates the allowed values for AccessConfig.BidRole.
@@ -25,6 +28,7 @@ const (
 var validBidRoles = map[string]bool{
 	BidRoleRfq: true, BidRoleBid: true, BidRoleSupplier: true,
 	BidRoleAward: true, BidRolePO: true,
+	BidRoleRfqClarify: true, BidRolePQ: true, BidRoleEvaluation: true,
 }
 
 // ValidateBidRole checks that a BidRole value is empty or one of the known values.

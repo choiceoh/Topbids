@@ -33,13 +33,14 @@ const (
 // status mapping in the handler (always forced to 'submitted' on create),
 // not user input.
 var supplierWritableBidFields = map[string]struct{}{
-	"rfq":          {}, // required relation; ownership check reads it
-	"supplier":     {}, // overwritten to caller's supplier_id below
-	"total_amount": {},
-	"lead_time":    {},
-	"valid_days":   {},
-	"note":         {},
-	"submitted_at": {}, // client may set; handler can also stamp
+	"rfq":           {}, // required relation; ownership check reads it
+	"supplier":      {}, // overwritten to caller's supplier_id below
+	"total_amount":  {},
+	"lead_time":     {},
+	"valid_days":    {},
+	"note":          {},
+	"submitted_at":  {}, // client may set; handler can also stamp
+	"reserve_picks": {}, // 복수예가 indices — 2 unique ints in [0,14]
 }
 
 // ErrNotBidOwner is returned when a supplier-role caller tries to write to
@@ -63,6 +64,12 @@ var ErrSupplierNotLinked = errors.New("forbidden: supplier account has no suppli
 // ErrRFQMissing is returned when the referenced RFQ id is absent from the
 // request body (create) or is unresolvable from an existing row.
 var ErrRFQMissing = errors.New("invalid: rfq is required")
+
+// ErrAuctionUndercut is returned when an auction-mode bid submission is not
+// strictly lower than the current leading price (excluding the bidder's own
+// prior bid). The whole point of reverse auction is that each new bid
+// undercuts the previous leader — a non-improving bid is forbidden.
+var ErrAuctionUndercut = errors.New("forbidden: auction bids must be strictly lower than the current best price")
 
 // EnforceBidWriteOwnership applies the Topbids write invariants for
 // supplier-role callers against the `bids` collection:
@@ -147,15 +154,16 @@ func EnforceBidWriteOwnership(
 		return fmt.Errorf("unknown op %q", op)
 	}
 
-	// RFQ must still be accepting submissions.
-	var rfqStatus string
+	// RFQ must still be accepting submissions. Auction mode adds an
+	// additional invariant (undercut rule) checked below.
+	var rfqStatus, rfqMode string
 	err := db.QueryRow(ctx, `
-		SELECT status
+		SELECT status, mode
 		  FROM data.rfqs
 		 WHERE id = $1
 		   AND deleted_at IS NULL`,
 		rfqID,
-	).Scan(&rfqStatus)
+	).Scan(&rfqStatus, &rfqMode)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrRFQNotAcceptingBids
@@ -166,5 +174,69 @@ func EnforceBidWriteOwnership(
 		return ErrRFQNotAcceptingBids
 	}
 
+	// Auction undercut check (create/update only, delete is exempt — retract
+	// is fine regardless of price). Enforced only for supplier callers on
+	// auction RFQs; admin-driven writes from buyer staff don't go through
+	// this branch (callerRole != supplierRole returns early above).
+	if rfqMode == "auction" && op != OpDelete {
+		newAmount, ok := toFloat(body["total_amount"])
+		if !ok {
+			// Auction bids require total_amount — fall through; the dynamic
+			// validator will reject before we hit this path for create. For
+			// update that omits total_amount, nothing to check.
+			return nil
+		}
+		if err := checkAuctionUndercut(ctx, db, rfqID, bidRowID, newAmount); err != nil {
+			return err
+		}
+	}
+
 	return nil
+}
+
+// checkAuctionUndercut loads the current minimum price across all live bids
+// on the RFQ, excluding the current row (so a supplier updating their own
+// bid doesn't block themselves). Returns ErrAuctionUndercut when the
+// proposed amount is not strictly lower.
+//
+// No-op when no competing bids exist yet — the first bid sets the floor
+// and has nothing to undercut.
+func checkAuctionUndercut(ctx context.Context, db rowQuerier, rfqID, excludeBidID string, newAmount float64) error {
+	var minAmount *float64
+	err := db.QueryRow(ctx, `
+		SELECT MIN(total_amount)
+		  FROM data.bids
+		 WHERE rfq = $1
+		   AND status IN ('submitted','opened','draft')
+		   AND ($2 = '' OR id::text <> $2)
+		   AND deleted_at IS NULL`,
+		rfqID, excludeBidID,
+	).Scan(&minAmount)
+	if err != nil {
+		return fmt.Errorf("load auction min: %w", err)
+	}
+	if minAmount == nil {
+		return nil // first bid — no floor yet
+	}
+	if newAmount >= *minAmount {
+		return fmt.Errorf("%w: current best %v, proposed %v", ErrAuctionUndercut, *minAmount, newAmount)
+	}
+	return nil
+}
+
+// toFloat coerces common JSON number representations into float64. RHF-
+// submitted numbers arrive as float64 already; this guards against string
+// bodies that slip through validation.
+func toFloat(v any) (float64, bool) {
+	switch x := v.(type) {
+	case float64:
+		return x, true
+	case float32:
+		return float64(x), true
+	case int:
+		return float64(x), true
+	case int64:
+		return float64(x), true
+	}
+	return 0, false
 }

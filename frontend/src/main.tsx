@@ -13,6 +13,9 @@ import AIChatPage from './pages/AIChatPage'
 import AppListPage from './pages/AppListPage'
 import AppViewPage from './pages/AppViewPage'
 import BidAuditPage from './pages/BidAuditPage'
+import BidClarificationsPage from './pages/BidClarificationsPage'
+import BidEvaluatePage from './pages/BidEvaluatePage'
+import BidManagePage from './pages/BidManagePage'
 import EntryPage from './pages/EntryPage'
 import GlobalCalendarPage from './pages/GlobalCalendarPage'
 import GlobalDashboardPage from './pages/GlobalDashboardPage'
@@ -20,6 +23,7 @@ import LoginPage from './pages/LoginPage'
 import MyTasksPage from './pages/MyTasksPage'
 import NotFoundPage from './pages/NotFoundPage'
 import OrgChartPage from './pages/OrgChartPage'
+import PortalAuctionPage from './pages/portal/PortalAuctionPage'
 import PortalBidHistoryPage from './pages/portal/PortalBidHistoryPage'
 import PortalBidSubmitPage from './pages/portal/PortalBidSubmitPage'
 import PortalLoginPage from './pages/portal/PortalLoginPage'
@@ -46,6 +50,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <EB><PortalRfqListPage /></EB> },
       { path: 'rfqs/:rfqId/bid', element: <EB><PortalBidSubmitPage /></EB> },
+      { path: 'rfqs/:rfqId/auction', element: <EB><PortalAuctionPage /></EB> },
       { path: 'history', element: <EB><PortalBidHistoryPage /></EB> },
       { path: '*', element: <NotFoundPage /> },
     ],
@@ -65,6 +70,9 @@ const router = createBrowserRouter([
       { path: 'admin/users', element: <EB><UsersPage /></EB> },
       { path: 'admin/org', element: <EB><OrgChartPage /></EB> },
       { path: 'admin/bid-audit', element: <EB><BidAuditPage /></EB> },
+      { path: 'admin/rfq-qa', element: <EB><BidClarificationsPage /></EB> },
+      { path: 'admin/rfqs/:rfqId/evaluate', element: <EB><BidEvaluatePage /></EB> },
+      { path: 'admin/rfqs/:rfqId/manage', element: <EB><BidManagePage /></EB> },
       { path: 'ai', element: <EB><AIChatPage /></EB> },
       { path: 'profile', element: <EB><ProfilePage /></EB> },
       { path: '*', element: <NotFoundPage /> },

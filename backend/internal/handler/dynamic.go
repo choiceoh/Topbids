@@ -155,7 +155,9 @@ func (h *DynHandler) List(w http.ResponseWriter, r *http.Request) {
 	//     competitors' contact info and biz_no)
 	supplierClause := ""
 	switch col.AccessConfig.BidRole {
-	case schema.BidRoleBid, schema.BidRolePO:
+	case schema.BidRoleBid, schema.BidRolePO, schema.BidRolePQ:
+		// bids/purchase_orders/supplier_qualifications all carry a `supplier`
+		// FK pointing at the caller's company — same filter shape.
 		if sql, bidArgs, active := bid.SupplierRowFilter(user.Role, user.SupplierID, len(args)+1); active {
 			supplierClause = " AND " + sql
 			args = append(args, bidArgs...)
@@ -238,11 +240,16 @@ func (h *DynHandler) List(w http.ResponseWriter, r *http.Request) {
 	h.loadM2MFields(r.Context(), records, fields, col.Slug)
 
 	// Topbids: mask sealed fields on bid-role collections (after relation
-	// expansion so cross-collection sealed_until_at refs resolve).
+	// expansion so cross-collection sealed_until_at refs resolve). Auction-
+	// mode RFQs skip masking entirely — the mode exists to let bidders
+	// see and undercut the current best price live.
 	if col.AccessConfig.BidRole == schema.BidRoleBid {
 		user, _ := middleware.GetUser(r.Context())
 		now := time.Now()
 		for _, rec := range records {
+			if bid.IsAuctionBidRow(rec) {
+				continue
+			}
 			bid.MaskSealedFields(fields, rec, "status", user.Role, now)
 		}
 	}
@@ -286,7 +293,7 @@ func (h *DynHandler) Get(w http.ResponseWriter, r *http.Request) {
 	// Topbids supplier row filter (mirror of List handler).
 	supplierGet := ""
 	switch col.AccessConfig.BidRole {
-	case schema.BidRoleBid, schema.BidRolePO:
+	case schema.BidRoleBid, schema.BidRolePO, schema.BidRolePQ:
 		if sql, bidArgs, active := bid.SupplierRowFilter(user.Role, user.SupplierID, len(getArgs)+1); active {
 			supplierGet = " AND " + sql
 			getArgs = append(getArgs, bidArgs...)
@@ -339,12 +346,14 @@ func (h *DynHandler) Get(w http.ResponseWriter, r *http.Request) {
 	// Topbids: mask sealed fields on bid-role collections (see List).
 	if col.AccessConfig.BidRole == schema.BidRoleBid {
 		user, _ := middleware.GetUser(r.Context())
-		bid.MaskSealedFields(fields, records[0], "status", user.Role, time.Now())
+		if !bid.IsAuctionBidRow(records[0]) {
+			bid.MaskSealedFields(fields, records[0], "status", user.Role, time.Now())
+		}
 
 		// Audit: single-record Get on a bid is the compliance-relevant event.
 		// List is intentionally not logged — too noisy and not row-specific.
 		action := bid.ActionReadSealed
-		if bid.IsRowOpened(fields, records[0], "status") {
+		if bid.IsAuctionBidRow(records[0]) || bid.IsRowOpened(fields, records[0], "status") {
 			action = bid.ActionReadOpened
 		}
 		recID, _ := records[0]["id"].(string)
@@ -1727,6 +1736,8 @@ func (h *DynHandler) enforceBidWrite(w http.ResponseWriter, r *http.Request, col
 		errors.Is(err, bid.ErrSupplierNotLinked),
 		errors.Is(err, bid.ErrRFQNotAcceptingBids):
 		writeError(w, http.StatusForbidden, err.Error())
+	case errors.Is(err, bid.ErrAuctionUndercut):
+		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, bid.ErrRFQMissing):
 		writeError(w, http.StatusBadRequest, err.Error())
 	default:

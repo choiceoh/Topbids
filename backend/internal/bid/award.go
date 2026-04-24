@@ -74,6 +74,11 @@ type Actor struct {
 	IP     string
 }
 
+// ErrSupplierNotQualified indicates the winning bid's supplier has no
+// valid (status='approved', valid_until >= today) PQ record for the RFQ's
+// category. Award is blocked until the buyer approves a qualification.
+var ErrSupplierNotQualified = errors.New("winning supplier lacks a valid PQ for this category")
+
 // RFQStatusCancelled is a terminal status set by admins to abandon an RFQ.
 // Separate from 'failed' (which is for no-eligible-bid outcomes).
 const RFQStatusCancelled = "cancelled"
@@ -249,12 +254,14 @@ func WithdrawBid(ctx context.Context, pool *pgxpool.Pool, bidID string, actor Ac
 func AwardRFQ(ctx context.Context, pool *pgxpool.Pool, rfqID string, actor Actor) (*AwardResult, error) {
 	// 1. Load RFQ + validate eligibility.
 	var rfqStatus, evalMethod string
+	var rfqCategory *string
+	var estimatedPrice, minWinRate *float64
 	err := pool.QueryRow(ctx, `
-		SELECT status, eval_method
+		SELECT status, eval_method, category, estimated_price, min_win_rate
 		  FROM data.rfqs
 		 WHERE id = $1 AND deleted_at IS NULL`,
 		rfqID,
-	).Scan(&rfqStatus, &evalMethod)
+	).Scan(&rfqStatus, &evalMethod, &rfqCategory, &estimatedPrice, &minWinRate)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrRFQNotFound
@@ -280,10 +287,37 @@ func AwardRFQ(ctx context.Context, pool *pgxpool.Pool, rfqID string, actor Actor
 		return nil, ErrNoBids
 	}
 
+	// 2a. Apply minimum winning price floor if configured. This is the
+	// "낙찰하한가" in Korean procurement — bids below (estimated * min_rate)
+	// are disqualified before scoring to prevent lowball wins from
+	// unable-to-deliver vendors. Both fields must be > 0 to activate.
+	bids = applyMinWinFloor(bids, estimatedPrice, minWinRate)
+	if len(bids) == 0 {
+		return nil, ErrNoBids
+	}
+
+	// 2b. Hydrate tech_score from bid_evaluations when multiple evaluators
+	// scored a bid. Falls back to the bid.tech_score column so collections
+	// that don't use multi-eval still work.
+	if evalMethod == EvalMethodWeighted {
+		if err := hydrateEvaluatorAverages(ctx, pool, bids); err != nil {
+			return nil, fmt.Errorf("hydrate evaluations: %w", err)
+		}
+	}
+
 	// 3. Pick winner.
 	winnerID, winnerAmount, err := pickWinner(bids, evalMethod)
 	if err != nil {
 		return nil, err
+	}
+
+	// 3a. Qualification check (적격심사): the winning supplier must have a
+	// currently-valid PQ row for the RFQ's category. Empty category or
+	// missing PQ collection both bypass — the feature is opt-in per deployment.
+	if rfqCategory != nil && *rfqCategory != "" {
+		if err := requireWinnerQualified(ctx, pool, winnerID, *rfqCategory); err != nil {
+			return nil, err
+		}
 	}
 
 	// 4. Apply status transitions in a single transaction.
@@ -376,6 +410,14 @@ func AwardRFQ(ctx context.Context, pool *pgxpool.Pool, rfqID string, actor Actor
 		slog.Warn("award: distribution failed, awarding anyway", "rfq_id", rfqID, "error", distErr)
 	}
 
+	// Notify all bidders (winner + rejected) so the suppliers' portal
+	// history page refreshes with final status. Best-effort.
+	if err := NotifyBidders(ctx, pool, rfqID, "rfq_awarded",
+		"낙찰 결과 발표", "참여하신 입찰의 낙찰 결과가 발표되었습니다.",
+	); err != nil {
+		slog.Warn("award: notify failed", "rfq_id", rfqID, "error", err)
+	}
+
 	return result, nil
 }
 
@@ -437,6 +479,120 @@ func loadExistingAward(ctx context.Context, pool *pgxpool.Pool, rfqID, evalMetho
 		RejectedBids: rejected,
 		Idempotent:   true,
 	}, nil
+}
+
+// hydrateEvaluatorAverages overwrites each bid's techScore with the average
+// of its rows in data.bid_evaluations. Bids with zero evaluation rows keep
+// their existing techScore (backward compat — single-evaluator deployments
+// continue to populate bid.tech_score directly).
+//
+// The query joins by bid id and counts rows with non-null tech_score only.
+func hydrateEvaluatorAverages(ctx context.Context, pool *pgxpool.Pool, bids []bidRow) error {
+	if len(bids) == 0 {
+		return nil
+	}
+	// Skip if the evaluations collection hasn't been seeded yet. Table-
+	// missing errors would otherwise break award for deployments that
+	// haven't run the new seed.
+	var exists bool
+	if err := pool.QueryRow(ctx, `
+		SELECT EXISTS(SELECT 1 FROM information_schema.tables
+		               WHERE table_schema='data' AND table_name='bid_evaluations')`,
+	).Scan(&exists); err != nil || !exists {
+		return nil //nolint:nilerr // table absent = feature off, not an error
+	}
+
+	ids := make([]string, len(bids))
+	for i, b := range bids {
+		ids[i] = b.id
+	}
+	rows, err := pool.Query(ctx, `
+		SELECT bid::text, AVG(tech_score)::float8
+		  FROM data.bid_evaluations
+		 WHERE bid = ANY($1::uuid[])
+		   AND tech_score IS NOT NULL
+		   AND deleted_at IS NULL
+		 GROUP BY bid`,
+		ids,
+	)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	avgs := make(map[string]float64)
+	for rows.Next() {
+		var id string
+		var avg float64
+		if err := rows.Scan(&id, &avg); err != nil {
+			return err
+		}
+		avgs[id] = avg
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for i := range bids {
+		if avg, ok := avgs[bids[i].id]; ok {
+			bids[i].techScore = &avg
+		}
+	}
+	return nil
+}
+
+// requireWinnerQualified returns ErrSupplierNotQualified unless the winning
+// bid's supplier holds an approved, unexpired PQ row for the RFQ category.
+// Bypasses silently when the supplier_qualifications collection is absent —
+// PQ is opt-in per deployment.
+func requireWinnerQualified(ctx context.Context, pool *pgxpool.Pool, bidID, category string) error {
+	var tableExists bool
+	if err := pool.QueryRow(ctx, `
+		SELECT EXISTS(SELECT 1 FROM information_schema.tables
+		               WHERE table_schema='data' AND table_name='supplier_qualifications')`,
+	).Scan(&tableExists); err != nil || !tableExists {
+		return nil //nolint:nilerr // PQ collection not seeded — feature off
+	}
+
+	var count int
+	err := pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM data.supplier_qualifications pq
+		  JOIN data.bids b ON b.supplier = pq.supplier
+		 WHERE b.id = $1
+		   AND pq.category = $2
+		   AND pq.status = 'approved'
+		   AND (pq.valid_until IS NULL OR pq.valid_until >= CURRENT_DATE)
+		   AND pq.deleted_at IS NULL`,
+		bidID, category,
+	).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("check PQ: %w", err)
+	}
+	if count == 0 {
+		return ErrSupplierNotQualified
+	}
+	return nil
+}
+
+// applyMinWinFloor drops bids whose total_amount is below the floor
+// (estimated_price * min_win_rate). Returns the input unchanged when either
+// configuration value is missing or non-positive — the feature is opt-in
+// per RFQ, not mandatory.
+//
+// Korean public-procurement convention is 80-87% of 예정가; private buyers
+// set their own rate. The intent is to disqualify bids so cheap the vendor
+// can't realistically deliver, before scoring runs.
+func applyMinWinFloor(bids []bidRow, estimated, rate *float64) []bidRow {
+	if estimated == nil || rate == nil || *estimated <= 0 || *rate <= 0 {
+		return bids
+	}
+	floor := *estimated * *rate
+	out := make([]bidRow, 0, len(bids))
+	for _, b := range bids {
+		if b.totalAmount >= floor {
+			out = append(out, b)
+		}
+	}
+	return out
 }
 
 // loadEligibleBids fetches bids that are still in play for the given RFQ.
