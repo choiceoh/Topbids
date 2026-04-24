@@ -327,7 +327,71 @@ func Run(ctx context.Context, engine *migration.Engine, cache *schema.Cache) err
 		return fmt.Errorf("seed: apply bid relations: %w", err)
 	}
 
+	// Upgrade access_config on pre-existing bid collections so deployments
+	// from before the role-gating work (PR #20 era) pick up the new write
+	// restrictions without requiring a DB wipe. Safe to run every boot:
+	// compares current state to the preset and is a no-op when they agree.
+	if err := syncBidAccessConfig(ctx, engine, cache); err != nil {
+		return fmt.Errorf("seed: sync bid access_config: %w", err)
+	}
+
 	return nil
+}
+
+// syncBidAccessConfig upgrades access_config on existing bid-domain
+// collections to match the presets in bid_apps.go. Called on every seed
+// run — idempotent because it only writes when the stored config differs
+// from the preset's.
+//
+// Scope is narrowed to the bid presets (which have a BidRole set) so a
+// human-edited access_config on unrelated user apps never gets clobbered.
+func syncBidAccessConfig(ctx context.Context, engine *migration.Engine, cache *schema.Cache) error {
+	presets := []func() Preset{suppliersPreset, rfqsPreset, bidsPreset, purchaseOrdersPreset}
+	for _, pf := range presets {
+		p := pf()
+		if p.AccessConfig == nil {
+			continue
+		}
+		col, exists := cache.CollectionBySlug(p.Slug)
+		if !exists {
+			continue // the create pass above will have made it fresh with the right config
+		}
+		if accessConfigMatches(col.AccessConfig, *p.AccessConfig) {
+			continue
+		}
+		acCopy := *p.AccessConfig
+		req := &schema.UpdateCollectionReq{AccessConfig: &acCopy}
+		if _, err := engine.UpdateCollection(ctx, col.ID, req); err != nil {
+			return fmt.Errorf("upgrade %s access_config: %w", p.Slug, err)
+		}
+		slog.Info("seed: upgraded access_config", "slug", p.Slug)
+	}
+	return nil
+}
+
+// accessConfigMatches reports whether two configs would produce identical
+// runtime authorization decisions. Compares every field the bid presets
+// populate. Nil and empty slices are treated as equivalent so JSON round-
+// trips through pgx don't trigger spurious upgrades.
+func accessConfigMatches(a, b schema.AccessConfig) bool {
+	return a.BidRole == b.BidRole &&
+		a.RLSMode == b.RLSMode &&
+		stringSliceEqual(a.EntryView, b.EntryView) &&
+		stringSliceEqual(a.EntryCreate, b.EntryCreate) &&
+		stringSliceEqual(a.EntryEdit, b.EntryEdit) &&
+		stringSliceEqual(a.EntryDelete, b.EntryDelete)
+}
+
+func stringSliceEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // applyOrgRefs adds subsidiary and self-referential parent relations to _departments.
