@@ -73,6 +73,121 @@ func (h *BidHandler) Award(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+// Cancel handles POST /api/bid/rfqs/{rfqId}/cancel.
+//
+// Abandons an RFQ that was issued in error (wrong category, duplicate, etc.)
+// and rejects any outstanding bids so suppliers see a definitive "탈락"
+// outcome rather than a stuck "제출됨" badge. Director/pm only.
+//
+// Body (optional): {"reason": "..."} — recorded in the audit log so the
+// team can review why an RFQ was pulled.
+func (h *BidHandler) Cancel(w http.ResponseWriter, r *http.Request) {
+	user, ok := middleware.GetUser(r.Context())
+	if !ok {
+		apierr.Unauthorized("not authenticated").Write(w)
+		return
+	}
+	if user.Role != RoleDirector && user.Role != RolePM {
+		apierr.Forbidden("only director or pm can cancel RFQs").Write(w)
+		return
+	}
+
+	rfqID := chi.URLParam(r, "rfqId")
+	if rfqID == "" {
+		apierr.BadRequest("rfqId is required").Write(w)
+		return
+	}
+
+	var body struct {
+		Reason string `json:"reason"`
+	}
+	// Empty body is fine — reason is optional.
+	_ = json.NewDecoder(r.Body).Decode(&body)
+
+	actor := bid.Actor{UserID: user.UserID, Name: user.Name, IP: clientIP(r)}
+	err := bid.CancelRFQ(r.Context(), h.pool, rfqID, strings.TrimSpace(body.Reason), actor)
+	if err != nil {
+		switch {
+		case errors.Is(err, bid.ErrRFQNotFound):
+			apierr.New(http.StatusNotFound, "RFQ_NOT_FOUND", err.Error()).Write(w)
+		case errors.Is(err, bid.ErrRFQNotCancellable):
+			apierr.New(http.StatusBadRequest, "RFQ_NOT_CANCELLABLE", err.Error()).Write(w)
+		default:
+			slog.Error("cancelRFQ", "rfq_id", rfqID, "error", err)
+			apierr.WrapInternal("cancel failed", err).Write(w)
+		}
+		return
+	}
+
+	slog.Info("rfq cancelled", "rfq_id", rfqID, "actor", user.UserID, "reason", body.Reason)
+	writeJSON(w, http.StatusOK, map[string]any{"rfq_id": rfqID, "status": "cancelled"})
+}
+
+// Withdraw handles POST /api/bid/bids/{bidId}/withdraw.
+//
+// Permits a supplier to retract their own bid while the parent RFQ is still
+// accepting changes. Admins (director/pm) may also withdraw on behalf of a
+// supplier — useful when a company calls to say they made a mistake.
+//
+// The per-row write guard (EnforceBidWriteOwnership) runs first so a supplier
+// can't withdraw someone else's bid.
+func (h *BidHandler) Withdraw(w http.ResponseWriter, r *http.Request) {
+	user, ok := middleware.GetUser(r.Context())
+	if !ok {
+		apierr.Unauthorized("not authenticated").Write(w)
+		return
+	}
+	// Admins or the bid owner only. The guard below enforces ownership for
+	// supplier callers; admins pass through unconditionally.
+	switch user.Role {
+	case RoleDirector, RolePM, "supplier":
+	default:
+		apierr.Forbidden("not permitted to withdraw bids").Write(w)
+		return
+	}
+
+	bidID := chi.URLParam(r, "bidId")
+	if bidID == "" {
+		apierr.BadRequest("bidId is required").Write(w)
+		return
+	}
+
+	// Row-ownership gate for suppliers. Also refuses if the parent RFQ has
+	// already closed — identical policy to edit/delete.
+	if user.Role == "supplier" {
+		if err := bid.EnforceBidWriteOwnership(r.Context(), h.pool, user.Role, user.SupplierID,
+			bid.OpUpdate, bidID, nil); err != nil {
+			switch {
+			case errors.Is(err, bid.ErrNotBidOwner):
+				apierr.Forbidden(err.Error()).Write(w)
+			case errors.Is(err, bid.ErrSupplierNotLinked):
+				apierr.Forbidden(err.Error()).Write(w)
+			case errors.Is(err, bid.ErrRFQNotAcceptingBids):
+				apierr.Forbidden(err.Error()).Write(w)
+			default:
+				apierr.WrapInternal("withdraw guard", err).Write(w)
+			}
+			return
+		}
+	}
+
+	actor := bid.Actor{UserID: user.UserID, Name: user.Name, IP: clientIP(r)}
+	if err := bid.WithdrawBid(r.Context(), h.pool, bidID, actor); err != nil {
+		switch {
+		case errors.Is(err, bid.ErrBidNotFound):
+			apierr.New(http.StatusNotFound, "BID_NOT_FOUND", err.Error()).Write(w)
+		case errors.Is(err, bid.ErrBidNotWithdrawable):
+			apierr.New(http.StatusBadRequest, "BID_NOT_WITHDRAWABLE", err.Error()).Write(w)
+		default:
+			slog.Error("withdrawBid", "bid_id", bidID, "error", err)
+			apierr.WrapInternal("withdraw failed", err).Write(w)
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"bid_id": bidID, "status": bid.BidStatusWithdrawn})
+}
+
 // AuditEntry is the wire shape of a _meta.bid_audit_log row. Lists are
 // paginated and sorted newest-first; the JSON envelope matches the standard
 // list response used by the dynamic data API for consistency.

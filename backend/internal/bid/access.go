@@ -40,13 +40,44 @@ var (
 // (1=0) — fail closed. This shouldn't happen in practice (SeedSupplierUser
 // enforces the pairing) but guards against misconfiguration.
 func SupplierRowFilter(userRole, supplierID string, startIdx int) (sql string, args []any, active bool) {
+	return supplierColumnFilter("supplier", userRole, supplierID, startIdx)
+}
+
+// RfqListModeFilter restricts the `rfqs` list endpoint for supplier-role
+// callers to public ("open") RFQs. Invited/private RFQs are reached by
+// direct link (the buyer shares /portal/rfqs/{id}/bid with chosen suppliers);
+// they must NOT appear in the discovery list, otherwise any supplier could
+// enumerate private tenders.
+//
+// Applies to List only. Get by ID still works so a supplier with the direct
+// link can view the RFQ and submit — the write guard separately enforces
+// published status, so invite-leak at Get is low-risk.
+func RfqListModeFilter(userRole string) (sql string, active bool) {
+	if userRole != supplierRole {
+		return "", false
+	}
+	return "mode = 'open'", true
+}
+
+// SupplierSelfRowFilter restricts reads on the `suppliers` master collection
+// so a supplier-role caller can only see their own company row. Without this,
+// listing /api/data/suppliers would leak every competitor's business number,
+// email, phone — a serious privacy regression.
+//
+// Same fail-closed semantics as SupplierRowFilter; wires against `id` rather
+// than a `supplier` column because the suppliers collection IS the target.
+func SupplierSelfRowFilter(userRole, supplierID string, startIdx int) (sql string, args []any, active bool) {
+	return supplierColumnFilter("id", userRole, supplierID, startIdx)
+}
+
+func supplierColumnFilter(column, userRole, supplierID string, startIdx int) (string, []any, bool) {
 	if userRole != supplierRole {
 		return "", nil, false
 	}
 	if supplierID == "" {
 		return "1=0", nil, true
 	}
-	return fmt.Sprintf("supplier = $%d", startIdx), []any{supplierID}, true
+	return fmt.Sprintf("%s = $%d", column, startIdx), []any{supplierID}, true
 }
 
 // MaskSealedFields walks the fields of a row and zeroes out any sealed-field

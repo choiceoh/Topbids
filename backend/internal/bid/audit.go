@@ -18,6 +18,8 @@ const (
 	ActionOpen       = "open"        // scheduler transitioned rfq → opened
 	ActionAward      = "award"       // AwardRFQ picked a winner
 	ActionDistribute = "distribute"  // DistributePO fanned out POs
+	ActionCancel     = "cancel"      // admin cancelled an RFQ
+	ActionWithdraw   = "withdraw"    // supplier retracted their bid
 )
 
 // execer is the minimal subset of pgx semantics the audit logger needs.

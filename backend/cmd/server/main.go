@@ -524,12 +524,24 @@ func buildRouter(cfg routerConfig) *chi.Mux {
 			ai.Post("/chat", cfg.aiH.Chat)
 		})
 
-		// Topbids bid-domain actions (director/pm only).
+		// Topbids bid-domain actions.
+		//
+		// Split into two sub-routers because withdraw is the only endpoint a
+		// supplier is allowed to call — the RequireRole middleware would
+		// otherwise block it.
 		r.Route("/api/bid", func(b chi.Router) {
-			b.Use(middleware.RequireRole("director", "pm"))
-			b.Post("/rfqs/{rfqId}/award", cfg.bidH.Award)
-			// Audit log viewer — handler further restricts to director.
-			b.Get("/audit", cfg.bidH.AuditLog)
+			// Admin-only (director/pm): award, cancel, audit.
+			b.Group(func(admin chi.Router) {
+				admin.Use(middleware.RequireRole("director", "pm"))
+				admin.Post("/rfqs/{rfqId}/award", cfg.bidH.Award)
+				admin.Post("/rfqs/{rfqId}/cancel", cfg.bidH.Cancel)
+				// Audit log viewer — handler further restricts to director.
+				admin.Get("/audit", cfg.bidH.AuditLog)
+			})
+			// Withdraw allows director/pm AND the bid's owning supplier.
+			// Role gating happens inside the handler because chi's
+			// RequireRole can't express "admin OR this specific supplier".
+			b.Post("/bids/{bidId}/withdraw", cfg.bidH.Withdraw)
 		})
 
 		// Notifications

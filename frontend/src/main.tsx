@@ -12,6 +12,7 @@ import { queryClient } from './lib/queryClient'
 import AIChatPage from './pages/AIChatPage'
 import AppListPage from './pages/AppListPage'
 import AppViewPage from './pages/AppViewPage'
+import BidAuditPage from './pages/BidAuditPage'
 import EntryPage from './pages/EntryPage'
 import GlobalCalendarPage from './pages/GlobalCalendarPage'
 import GlobalDashboardPage from './pages/GlobalDashboardPage'
@@ -63,6 +64,7 @@ const router = createBrowserRouter([
       { path: 'settings', element: <EB><SettingsPage /></EB> },
       { path: 'admin/users', element: <EB><UsersPage /></EB> },
       { path: 'admin/org', element: <EB><OrgChartPage /></EB> },
+      { path: 'admin/bid-audit', element: <EB><BidAuditPage /></EB> },
       { path: 'ai', element: <EB><AIChatPage /></EB> },
       { path: 'profile', element: <EB><ProfilePage /></EB> },
       { path: '*', element: <NotFoundPage /> },

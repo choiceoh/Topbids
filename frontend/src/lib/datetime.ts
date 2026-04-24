@@ -57,6 +57,34 @@ export function formatDeadlineRelative(value: unknown, now: Date = new Date()): 
   return `${past ? '마감' : '마감까지'} ${days}일${past ? ' 지남' : ' 남음'}`
 }
 
+/**
+ * Korean-friendly money formatter for Topbids.
+ *
+ * Procurement numbers reach 10억+ routinely and grouping commas alone become
+ * hard to scan. This renders "1억 2,000만 원", falling back to plain
+ * comma-separated won for small amounts. Null/NaN/zero render as "—" so
+ * missing-data rows look empty rather than "0원".
+ */
+export function formatKRW(value: unknown): string {
+  const n = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(n) || n === 0) return '—'
+
+  const sign = n < 0 ? '-' : ''
+  const abs = Math.abs(n)
+  const eok = Math.floor(abs / 100_000_000)
+  const man = Math.floor((abs % 100_000_000) / 10_000)
+  const rest = Math.round(abs % 10_000)
+
+  const parts: string[] = []
+  if (eok > 0) parts.push(`${eok.toLocaleString('ko-KR')}억`)
+  if (man > 0) parts.push(`${man.toLocaleString('ko-KR')}만`)
+  // Drop sub-10,000 remainder for large figures — procurement rounding rarely
+  // cares about won-level precision above 1억.
+  if (eok === 0 && rest > 0) parts.push(rest.toLocaleString('ko-KR'))
+  if (parts.length === 0) return `${sign}0 원`
+  return `${sign}${parts.join(' ')} 원`
+}
+
 function coerce(value: unknown): Date | null {
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value
   if (typeof value !== 'string' || !value) return null

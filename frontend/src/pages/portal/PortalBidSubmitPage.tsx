@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useCurrentUser } from '@/hooks/useAuth'
 import { api, formatError } from '@/lib/api'
-import { formatDateTimeKR, formatDeadlineRelative } from '@/lib/datetime'
+import { formatDateTimeKR, formatDeadlineRelative, formatKRW } from '@/lib/datetime'
 import type { EntryRow } from '@/lib/types'
 
 // RHF registers <input type="number"> with valueAsNumber:true so the form
@@ -31,9 +31,6 @@ const schema = z.object({
 
 type BidForm = z.infer<typeof schema>
 
-function formatMoney(n: number): string {
-  return n.toLocaleString('ko-KR') + ' 원'
-}
 
 /**
  * Bid submission form for a single RFQ. Handles both create (no existing bid)
@@ -255,7 +252,7 @@ export default function PortalBidSubmitPage() {
           title={existing ? '입찰서를 수정할까요?' : '입찰서를 제출할까요?'}
           description={
             pendingValues
-              ? `입찰금액 ${formatMoney(pendingValues.total_amount)}` +
+              ? `입찰금액 ${formatKRW(pendingValues.total_amount)}` +
                 (pendingValues.lead_time != null
                   ? ` · 납기 ${pendingValues.lead_time}일`
                   : '') +

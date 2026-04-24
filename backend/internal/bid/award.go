@@ -74,6 +74,160 @@ type Actor struct {
 	IP     string
 }
 
+// RFQStatusCancelled is a terminal status set by admins to abandon an RFQ.
+// Separate from 'failed' (which is for no-eligible-bid outcomes).
+const RFQStatusCancelled = "cancelled"
+
+// ErrRFQNotCancellable is returned when CancelRFQ is invoked on a terminal
+// RFQ (already cancelled/failed/awarded). Admins must not reverse those
+// because downstream POs may already depend on them.
+var ErrRFQNotCancellable = errors.New("rfq is in a terminal state and cannot be cancelled")
+
+// CancelRFQ marks an RFQ as cancelled and rejects any outstanding bids in a
+// single transaction, then logs an audit trail entry.
+//
+// Eligible states: draft, published, closed, opened, evaluating. Once an RFQ
+// is awarded/cancelled/failed, it cannot be cancelled — terminal states are
+// final (awarded already has POs, others already recorded that outcome).
+//
+// Outstanding submitted/opened bids on the RFQ are moved to BidStatusRejected
+// so suppliers see a consistent "탈락" status and no bid remains "in limbo".
+// Drafts and already-rejected bids are left alone.
+func CancelRFQ(ctx context.Context, pool *pgxpool.Pool, rfqID, reason string, actor Actor) error {
+	var status string
+	err := pool.QueryRow(ctx,
+		`SELECT status FROM data.rfqs WHERE id = $1 AND deleted_at IS NULL`,
+		rfqID,
+	).Scan(&status)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrRFQNotFound
+		}
+		return fmt.Errorf("load rfq: %w", err)
+	}
+	switch status {
+	case RFQStatusAwarded, RFQStatusCancelled, RFQStatusFailed:
+		return fmt.Errorf("%w: status=%q", ErrRFQNotCancellable, status)
+	}
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE data.rfqs SET status = $1, updated_at = now()
+		 WHERE id = $2`,
+		RFQStatusCancelled, rfqID,
+	); err != nil {
+		return fmt.Errorf("cancel rfq: %w", err)
+	}
+
+	// Reject live bids so suppliers see a definitive outcome rather than a
+	// stale "제출됨" badge forever.
+	if _, err := tx.Exec(ctx, `
+		UPDATE data.bids SET status = $1, updated_at = now()
+		 WHERE rfq = $2 AND status IN ($3, $4) AND deleted_at IS NULL`,
+		BidStatusRejected, rfqID, BidStatusSubmitted, BidStatusOpened,
+	); err != nil {
+		return fmt.Errorf("reject bids: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+
+	actorName := actor.Name
+	if actorName == "" {
+		actorName = "cancel-rfq"
+	}
+	LogEvent(ctx, pool, AuditEntry{
+		ActorID:   actor.UserID,
+		ActorName: actorName,
+		Action:    ActionCancel,
+		AppSlug:   "rfqs",
+		RowID:     rfqID,
+		IP:        actor.IP,
+		Detail: map[string]any{
+			"reason": reason,
+			"from":   status,
+		},
+	})
+
+	return nil
+}
+
+// BidStatusWithdrawn is what a supplier-initiated retract transitions to.
+// Keeping it separate from 'rejected' preserves the distinction between
+// "evaluator ruled out" and "supplier pulled their own offer".
+const BidStatusWithdrawn = "withdrawn"
+
+// ErrBidNotWithdrawable is returned when WithdrawBid is invoked on a bid
+// whose RFQ has moved past 'published' or whose status is terminal.
+var ErrBidNotWithdrawable = errors.New("bid cannot be withdrawn in its current state")
+
+// ErrBidNotFound is returned when the bid row doesn't exist or is
+// soft-deleted. Callers that expose this to suppliers should collapse to a
+// generic 404 to avoid existence enumeration.
+var ErrBidNotFound = errors.New("bid not found")
+
+// WithdrawBid lets a supplier (or admin) retract a submitted bid while the
+// parent RFQ is still accepting changes. Ownership is enforced at the
+// handler layer via EnforceBidWriteOwnership; here we only transition the
+// status and write an audit row.
+//
+// The operation is idempotent on already-withdrawn bids — a second call
+// returns nil without touching the DB.
+func WithdrawBid(ctx context.Context, pool *pgxpool.Pool, bidID string, actor Actor) error {
+	var bidStatus, rfqStatus string
+	err := pool.QueryRow(ctx, `
+		SELECT b.status, r.status
+		  FROM data.bids b
+		  JOIN data.rfqs r ON r.id = b.rfq
+		 WHERE b.id = $1 AND b.deleted_at IS NULL AND r.deleted_at IS NULL`,
+		bidID,
+	).Scan(&bidStatus, &rfqStatus)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrBidNotFound
+		}
+		return fmt.Errorf("load bid: %w", err)
+	}
+	if bidStatus == BidStatusWithdrawn {
+		return nil // idempotent
+	}
+	if bidStatus != BidStatusDraft && bidStatus != BidStatusSubmitted {
+		return fmt.Errorf("%w: status=%q", ErrBidNotWithdrawable, bidStatus)
+	}
+	if rfqStatus != RFQStatusPublished {
+		return fmt.Errorf("%w: rfq is %q", ErrBidNotWithdrawable, rfqStatus)
+	}
+
+	if _, err := pool.Exec(ctx, `
+		UPDATE data.bids SET status = $1, updated_at = now()
+		 WHERE id = $2`,
+		BidStatusWithdrawn, bidID,
+	); err != nil {
+		return fmt.Errorf("withdraw: %w", err)
+	}
+
+	actorName := actor.Name
+	if actorName == "" {
+		actorName = "withdraw-bid"
+	}
+	LogEvent(ctx, pool, AuditEntry{
+		ActorID:   actor.UserID,
+		ActorName: actorName,
+		Action:    ActionWithdraw,
+		AppSlug:   "bids",
+		RowID:     bidID,
+		IP:        actor.IP,
+		Detail:    map[string]any{"from_status": bidStatus},
+	})
+	return nil
+}
+
 // AwardRFQ selects a winner among the eligible bids for the given RFQ,
 // then updates statuses in a single transaction:
 //   - winning bid: BidStatusAwarded
