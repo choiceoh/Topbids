@@ -22,6 +22,10 @@ import type { EntryRow } from '@/lib/types'
 
 // RHF registers <input type="number"> with valueAsNumber:true so the form
 // state holds real numbers — no coerce needed here.
+//
+// reserve_picks is managed as separate checkbox state rather than via RHF
+// because the rule "exactly 2 distinct indices" is easier to enforce in
+// imperative code than through zod array constraints.
 const schema = z.object({
   total_amount: z.number().positive('0보다 커야 합니다'),
   lead_time: z.number().int().nonnegative('0 이상이어야 합니다').optional(),
@@ -75,6 +79,41 @@ export default function PortalBidSubmitPage() {
 
   const existing = existingBidQuery.data?.data[0]
 
+  // Q&A thread against this RFQ. Everyone authenticated can read (transparency)
+  // — suppliers see their own pending questions plus all answered ones.
+  // New questions from this supplier are appended below.
+  const clarificationsQuery = useQuery({
+    queryKey: ['portal', 'rfq-qa', rfqId],
+    queryFn: () =>
+      api.getList<EntryRow>(
+        `/data/rfq_clarifications?sort=-asked_at&limit=100&_filter=` +
+          encodeURIComponent(
+            JSON.stringify({
+              op: 'and',
+              conditions: [{ field: 'rfq', op: 'eq', value: rfqId }],
+            }),
+          ),
+      ),
+    enabled: !!rfqId,
+  })
+
+  const [question, setQuestion] = useState('')
+  const askQuestion = useMutation({
+    mutationFn: (body: string) =>
+      api.post<EntryRow>('/data/rfq_clarifications', {
+        rfq: rfqId,
+        question: body,
+        asked_at: new Date().toISOString(),
+        status: 'pending',
+      }),
+    onSuccess: () => {
+      toast.success('질문이 등록되었습니다. 답변이 달리면 이곳에 표시됩니다.')
+      setQuestion('')
+      qc.invalidateQueries({ queryKey: ['portal', 'rfq-qa', rfqId] })
+    },
+    onError: (err) => toast.error(formatError(err)),
+  })
+
   const form = useForm<BidForm>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -84,6 +123,17 @@ export default function PortalBidSubmitPage() {
       note: '',
     },
   })
+
+  // reserve_picks state for multiple-reserve-price RFQs. Rule: exactly 2
+  // distinct indices in [0, reserves.length). The form submit path refuses
+  // unless this constraint is met.
+  const [reservePicks, setReservePicks] = useState<number[]>([])
+  useEffect(() => {
+    const raw = existing?.reserve_picks
+    if (Array.isArray(raw)) {
+      setReservePicks(raw.filter((x): x is number => typeof x === 'number'))
+    }
+  }, [existing])
 
   // Hydrate the form when existing bid data arrives.
   useEffect(() => {
@@ -108,12 +158,18 @@ export default function PortalBidSubmitPage() {
       if (!user?.supplier_id) {
         throw new Error('공급사 정보가 연결되어 있지 않습니다. 관리자에게 문의하세요.')
       }
-      const payload = {
+      const payload: Record<string, unknown> = {
         ...values,
         rfq: rfqId,
         supplier: user.supplier_id,
         status: 'submitted',
         submitted_at: new Date().toISOString(),
+      }
+      if (rfqQuery.data?.reserve_method === 'multiple') {
+        if (reservePicks.length !== 2) {
+          throw new Error('복수예가 방식이므로 예비가격 2개를 선택해야 합니다.')
+        }
+        payload.reserve_picks = reservePicks
       }
       if (existing?.id) {
         return api.patch<EntryRow>(`/data/bids/${String(existing.id)}`, payload)
@@ -198,6 +254,27 @@ export default function PortalBidSubmitPage() {
         </Card>
       )}
 
+      {typeof rfq.amendment_count === 'number' && rfq.amendment_count > 0 && (
+        <Card className="mb-6 border-amber-500/40 bg-amber-50/40 p-4 text-sm">
+          <div className="mb-1 font-medium text-amber-800">
+            공고가 {rfq.amendment_count}회 변경되었습니다
+            {typeof rfq.last_amended_at === 'string' &&
+              ` (최근 ${formatDateTimeKR(rfq.last_amended_at)})`}
+          </div>
+          {typeof rfq.amendment_note === 'string' && rfq.amendment_note && (
+            <div className="whitespace-pre-wrap text-foreground/90">{rfq.amendment_note}</div>
+          )}
+        </Card>
+      )}
+
+      <AttachmentsBlock value={rfq.attachments} />
+
+      {typeof rfq.description === 'string' && rfq.description && (
+        <Card className="mb-6 p-5 text-sm leading-relaxed whitespace-pre-wrap">
+          {rfq.description}
+        </Card>
+      )}
+
       <FormProvider {...form}>
         <form
           onSubmit={form.handleSubmit((v) => {
@@ -236,6 +313,15 @@ export default function PortalBidSubmitPage() {
             <Textarea rows={4} disabled={!editable} {...form.register('note')} />
           </FormField>
 
+          {rfq.reserve_method === 'multiple' && Array.isArray(rfq.reserve_prices) && (
+            <ReservePicker
+              reserves={rfq.reserve_prices as number[]}
+              picks={reservePicks}
+              disabled={!editable}
+              onChange={setReservePicks}
+            />
+          )}
+
           <div className="flex items-center justify-end gap-2 border-t border-border pt-4">
             <Button variant="ghost" type="button" onClick={() => navigate('/portal')}>
               취소
@@ -245,6 +331,17 @@ export default function PortalBidSubmitPage() {
             </Button>
           </div>
         </form>
+
+        <ClarificationsBlock
+          rfqStatus={rfqStatus}
+          rfqEditable={editable}
+          clarifications={clarificationsQuery.data?.data ?? []}
+          loading={clarificationsQuery.isLoading}
+          question={question}
+          onQuestionChange={setQuestion}
+          onAsk={() => askQuestion.mutate(question)}
+          asking={askQuestion.isPending}
+        />
 
         <ConfirmDialog
           open={confirmOpen}
@@ -267,5 +364,203 @@ export default function PortalBidSubmitPage() {
         />
       </FormProvider>
     </div>
+  )
+}
+
+// AttachmentsBlock renders the RFQ's `attachments` file field. The backend
+// stores file references as JSONB metadata; we accept either an array of
+// {filename, url} objects, a single object, or a plain URL string so the
+// display works no matter how the buyer populated the field.
+function AttachmentsBlock({ value }: { value: unknown }) {
+  const files = normaliseFiles(value)
+  if (files.length === 0) return null
+  return (
+    <Card className="mb-6 p-5">
+      <h3 className="mb-3 text-sm font-semibold text-foreground">첨부 파일</h3>
+      <ul className="space-y-1 text-sm">
+        {files.map((f, i) => (
+          <li key={i}>
+            <a
+              href={f.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+              download={f.filename}
+            >
+              {f.filename ?? f.url}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  )
+}
+
+// ReservePicker renders the 15 reserve candidates as a two-column grid of
+// selectable chips. Exactly 2 must be chosen — the picker enforces this by
+// limiting selection to 2 and blocking a third. The chosen indices are
+// what the backend's ResolveMultipleReservePrices function later averages.
+function ReservePicker(props: {
+  reserves: number[]
+  picks: number[]
+  disabled: boolean
+  onChange: (next: number[]) => void
+}) {
+  const toggle = (idx: number) => {
+    if (props.disabled) return
+    if (props.picks.includes(idx)) {
+      props.onChange(props.picks.filter((p) => p !== idx))
+      return
+    }
+    if (props.picks.length >= 2) return // 2 picks max
+    props.onChange([...props.picks, idx].sort((a, b) => a - b))
+  }
+  return (
+    <div className="rounded-lg border border-border bg-muted/30 p-4">
+      <div className="mb-2 flex items-center justify-between">
+        <h4 className="text-sm font-semibold text-foreground">복수예가 선택 (2개 필수)</h4>
+        <span className="text-xs text-muted-foreground">
+          선택 {props.picks.length}/2
+        </span>
+      </div>
+      <p className="mb-3 text-xs text-muted-foreground">
+        15개 예비가격 중 2개를 선택하세요. 개찰 시 가장 많이 선택된 4개의 평균이 예정가가 됩니다.
+      </p>
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+        {props.reserves.map((price, idx) => {
+          const selected = props.picks.includes(idx)
+          return (
+            <button
+              key={idx}
+              type="button"
+              disabled={props.disabled || (!selected && props.picks.length >= 2)}
+              onClick={() => toggle(idx)}
+              className={`rounded-md border px-3 py-2 text-xs transition-colors ${
+                selected
+                  ? 'border-foreground bg-foreground text-white'
+                  : 'border-border bg-white hover:bg-accent disabled:opacity-40'
+              }`}
+            >
+              <div className="font-mono text-[10px] text-muted-foreground/80">
+                #{idx + 1}
+              </div>
+              <div className={`font-medium ${selected ? 'text-white' : 'text-foreground'}`}>
+                {price.toLocaleString('ko-KR')}
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function normaliseFiles(value: unknown): Array<{ url: string; filename?: string }> {
+  if (!value) return []
+  if (typeof value === 'string') return [{ url: value }]
+  if (Array.isArray(value)) {
+    return value.flatMap((v) => normaliseFiles(v))
+  }
+  if (typeof value === 'object') {
+    const obj = value as Record<string, unknown>
+    const url = typeof obj.url === 'string' ? obj.url : typeof obj.path === 'string' ? obj.path : ''
+    if (!url) return []
+    return [{ url, filename: typeof obj.filename === 'string' ? obj.filename : undefined }]
+  }
+  return []
+}
+
+// ClarificationsBlock renders the Q&A thread for the current RFQ. Everyone
+// sees the same answered questions (transparency). Suppliers can post new
+// questions only while the RFQ is still accepting bids — locking the input
+// mirrors the bid form's editable gate so the supplier isn't misled into
+// thinking a late question will be answered.
+function ClarificationsBlock(props: {
+  rfqStatus: string
+  rfqEditable: boolean
+  clarifications: EntryRow[]
+  loading: boolean
+  question: string
+  onQuestionChange: (v: string) => void
+  onAsk: () => void
+  asking: boolean
+}) {
+  const answered = props.clarifications.filter((c) => c.status === 'answered')
+  const pending = props.clarifications.filter((c) => c.status !== 'answered')
+
+  return (
+    <section className="mt-8 space-y-4">
+      <h3 className="text-sm font-semibold text-foreground">질의응답 (Q&A)</h3>
+
+      {props.loading ? (
+        <p className="text-xs text-muted-foreground">불러오는 중…</p>
+      ) : props.clarifications.length === 0 ? (
+        <p className="text-xs text-muted-foreground">아직 등록된 질문이 없습니다.</p>
+      ) : (
+        <ul className="space-y-3">
+          {[...answered, ...pending].map((c) => (
+            <li
+              key={String(c.id)}
+              className="rounded-lg border border-border bg-white p-4 text-sm"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <p className="whitespace-pre-wrap text-foreground">
+                  <span className="mr-2 font-medium text-muted-foreground">Q.</span>
+                  {String(c.question ?? '')}
+                </p>
+                <span
+                  className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] ${
+                    c.status === 'answered'
+                      ? 'bg-foreground text-white'
+                      : 'bg-muted text-muted-foreground'
+                  }`}
+                >
+                  {c.status === 'answered' ? '답변됨' : '대기'}
+                </span>
+              </div>
+              {c.status === 'answered' && (
+                <p className="mt-2 whitespace-pre-wrap border-l-2 border-border pl-3 text-foreground/90">
+                  <span className="mr-2 font-medium text-muted-foreground">A.</span>
+                  {String(c.answer ?? '')}
+                </p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {props.rfqEditable ? (
+        <div className="rounded-lg border border-border bg-white p-4">
+          <label className="text-xs font-medium text-foreground">
+            질문 등록
+            <span className="ml-2 text-muted-foreground">
+              · 답변은 모든 입찰 참여자에게 공개됩니다
+            </span>
+          </label>
+          <Textarea
+            rows={3}
+            className="mt-2"
+            placeholder="공고 내용 중 궁금한 점을 입력하세요"
+            value={props.question}
+            onChange={(e) => props.onQuestionChange(e.target.value)}
+          />
+          <div className="mt-2 flex justify-end">
+            <Button
+              type="button"
+              size="sm"
+              disabled={!props.question.trim() || props.asking}
+              onClick={props.onAsk}
+            >
+              {props.asking ? '등록 중…' : '질문 등록'}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          공고가 마감되어 새 질문은 받지 않습니다
+          {props.rfqStatus ? ` (상태: ${props.rfqStatus})` : ''}.
+        </p>
+      )}
+    </section>
   )
 }
