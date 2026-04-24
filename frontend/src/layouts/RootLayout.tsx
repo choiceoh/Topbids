@@ -77,6 +77,9 @@ export default function RootLayout() {
                   <div className="mx-1.5 h-4 w-px bg-border" aria-hidden="true" />
                   <NavLink to="/history" className={navCls} viewTransition>이력</NavLink>
                   <NavLink to="/admin/users" className={navCls} viewTransition>사용자 관리</NavLink>
+                  {user.role === 'director' && (
+                    <NavLink to="/admin/bid-audit" className={navCls} viewTransition>감사</NavLink>
+                  )}
                   <NavLink to="/settings" className={navCls} viewTransition>설정</NavLink>
                 </>
               )}
