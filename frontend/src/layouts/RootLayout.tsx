@@ -72,9 +72,14 @@ export default function RootLayout() {
               <NavLink to="/ai" className={navCls} viewTransition>AI</NavLink>
 
               {/* 관리 */}
-              {(user.role === 'director' || user.role === 'pm') && (
+              {(user.role === 'director' || user.role === 'pm' || user.role === 'engineer') && (
                 <>
                   <div className="mx-1.5 h-4 w-px bg-border" aria-hidden="true" />
+                  <NavLink to="/admin/rfq-qa" className={navCls} viewTransition>Q&A</NavLink>
+                </>
+              )}
+              {(user.role === 'director' || user.role === 'pm') && (
+                <>
                   <NavLink to="/history" className={navCls} viewTransition>이력</NavLink>
                   <NavLink to="/admin/users" className={navCls} viewTransition>사용자 관리</NavLink>
                   {user.role === 'director' && (
