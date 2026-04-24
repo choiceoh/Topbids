@@ -139,6 +139,15 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 	}
 	for _, id := range opened {
 		s.publish(ctx, rfqs, id, RFQStatusOpened)
+		// Audit: record scheduler-initiated open of each RFQ. No actor — this
+		// is a system event. Detail carries the transition for future analysis.
+		LogEvent(ctx, s.pool, AuditEntry{
+			ActorName: "bid-scheduler",
+			Action:    ActionOpen,
+			AppSlug:   rfqs.Slug,
+			RowID:     id,
+			Detail:    map[string]any{"from": RFQStatusClosed, "to": RFQStatusOpened},
+		})
 	}
 
 	return nil

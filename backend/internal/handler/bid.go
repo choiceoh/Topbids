@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/choiceoh/phaeton/backend/internal/bid"
+	"github.com/choiceoh/phaeton/backend/internal/middleware"
 	"github.com/choiceoh/phaeton/backend/internal/schema"
 )
 
@@ -33,7 +34,9 @@ func (h *BidHandler) Award(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := bid.AwardRFQ(r.Context(), h.pool, rfqID)
+	user, _ := middleware.GetUser(r.Context())
+	actor := bid.Actor{UserID: user.UserID, Name: user.Name, IP: clientIP(r)}
+	result, err := bid.AwardRFQ(r.Context(), h.pool, rfqID, actor)
 	if err != nil {
 		switch {
 		case errors.Is(err, bid.ErrRFQNotFound):

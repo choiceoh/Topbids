@@ -59,6 +59,14 @@ type bidRow struct {
 	techScore   *float64
 }
 
+// Actor carries the who-did-it metadata for audit-logged actions. Zero value
+// is valid: an empty ID produces a "system" entry in _meta.bid_audit_log.
+type Actor struct {
+	UserID string
+	Name   string
+	IP     string
+}
+
 // AwardRFQ selects a winner among the eligible bids for the given RFQ,
 // then updates statuses in a single transaction:
 //   - winning bid: BidStatusAwarded
@@ -74,7 +82,10 @@ type bidRow struct {
 //   - "weighted": price_score = (min_amount / this_amount) * 100;
 //                 total = tech * w + price * (1-w) where w = tech_weight/100
 //                 Requires every bid to have a tech_score. Ties broken as above.
-func AwardRFQ(ctx context.Context, pool *pgxpool.Pool, rfqID string) (*AwardResult, error) {
+//
+// actor is recorded on the audit trail. Pass a zero Actor for scripted/system
+// invocations.
+func AwardRFQ(ctx context.Context, pool *pgxpool.Pool, rfqID string, actor Actor) (*AwardResult, error) {
 	// 1. Load RFQ + validate eligibility.
 	var rfqStatus, evalMethod string
 	err := pool.QueryRow(ctx, `
@@ -163,6 +174,27 @@ func AwardRFQ(ctx context.Context, pool *pgxpool.Pool, rfqID string) (*AwardResu
 		TotalBids:    len(bids),
 		RejectedBids: rejectedIDs,
 	}
+
+	// Audit: log the award before chaining into PO distribution so we have a
+	// record even if distribution fails downstream.
+	actorName := actor.Name
+	if actorName == "" {
+		actorName = "award-rfq"
+	}
+	LogEvent(ctx, pool, AuditEntry{
+		ActorID:   actor.UserID,
+		ActorName: actorName,
+		Action:    ActionAward,
+		AppSlug:   "rfqs",
+		RowID:     rfqID,
+		IP:        actor.IP,
+		Detail: map[string]any{
+			"winner_bid_id": winnerID,
+			"winner_amount": winnerAmount,
+			"eval_method":   evalMethod,
+			"total_bids":    len(bids),
+		},
+	})
 
 	// Chain: automatically fan out into per-subsidiary POs. Failures here
 	// don't invalidate the award — the admin can retry distribution later.
