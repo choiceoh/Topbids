@@ -530,14 +530,26 @@ func buildRouter(cfg routerConfig) *chi.Mux {
 		// supplier is allowed to call — the RequireRole middleware would
 		// otherwise block it.
 		r.Route("/api/bid", func(b chi.Router) {
-			// Admin-only (director/pm): award, cancel, audit.
+			// Admin-only (director/pm): award, cancel, amend, clone, evaluate, audit.
 			b.Group(func(admin chi.Router) {
 				admin.Use(middleware.RequireRole("director", "pm"))
+				admin.Post("/rfqs/{rfqId}/publish", cfg.bidH.Publish)
 				admin.Post("/rfqs/{rfqId}/award", cfg.bidH.Award)
 				admin.Post("/rfqs/{rfqId}/cancel", cfg.bidH.Cancel)
+				admin.Post("/rfqs/{rfqId}/amend", cfg.bidH.Amend)
+				admin.Post("/rfqs/{rfqId}/clone", cfg.bidH.Clone)
+				admin.Post("/rfqs/{rfqId}/evaluate", cfg.bidH.Evaluate)
 				// Audit log viewer — handler further restricts to director.
 				admin.Get("/audit", cfg.bidH.AuditLog)
 			})
+			// Buyer staff (director/pm/engineer): Q&A answer flow.
+			b.Group(func(staff chi.Router) {
+				staff.Use(middleware.RequireRole("director", "pm", "engineer"))
+				staff.Post("/clarifications/{id}/answer", cfg.bidH.AnswerClarification)
+			})
+			// Any authenticated caller: auction leaderboard. Handler gates
+			// suppliers to only those with a bid on the RFQ.
+			b.Get("/rfqs/{rfqId}/auction-bids", cfg.bidH.AuctionBids)
 			// Withdraw allows director/pm AND the bid's owning supplier.
 			// Role gating happens inside the handler because chi's
 			// RequireRole can't express "admin OR this specific supplier".

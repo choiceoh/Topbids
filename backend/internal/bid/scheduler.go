@@ -133,12 +133,33 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 		slog.Info("bid scheduler: transitioned", "closed", len(closed), "opened", len(opened))
 	}
 
+	// PQ auto-expiry: flip approved qualifications whose valid_until is in
+	// the past. Safe to run every tick — matches on a predicate so idempotent.
+	if expired, err := s.expirePQ(ctx); err != nil {
+		slog.Warn("bid scheduler: pq expiry failed", "error", err)
+	} else if len(expired) > 0 {
+		slog.Info("bid scheduler: expired PQ", "count", len(expired))
+		for _, id := range expired {
+			LogEvent(ctx, s.pool, AuditEntry{
+				ActorName: "bid-scheduler",
+				Action:    "pq_expire",
+				AppSlug:   "supplier_qualifications",
+				RowID:     id,
+			})
+		}
+	}
+
 	// Broadcast events so SSE subscribers (frontend) refresh.
 	for _, id := range closed {
 		s.publish(ctx, rfqs, id, RFQStatusClosed)
 	}
 	for _, id := range opened {
 		s.publish(ctx, rfqs, id, RFQStatusOpened)
+		// Multi-reserve method: compute 예정가 from bidder picks.
+		// Best-effort — a failure here shouldn't block the rest of the tick.
+		if err := ResolveMultipleReservePrices(ctx, s.pool, id); err != nil {
+			slog.Warn("bid scheduler: resolve planned price failed", "rfq_id", id, "error", err)
+		}
 		// Audit: record scheduler-initiated open of each RFQ. No actor — this
 		// is a system event. Detail carries the transition for future analysis.
 		LogEvent(ctx, s.pool, AuditEntry{
@@ -148,9 +169,52 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 			RowID:     id,
 			Detail:    map[string]any{"from": RFQStatusClosed, "to": RFQStatusOpened},
 		})
+		// In-app notification to every submitted-bid supplier. Best-effort —
+		// failure here shouldn't roll back the transition.
+		if err := NotifyBidders(ctx, s.pool, id, "rfq_opened",
+			"개찰 알림", "참여하신 입찰 공고가 개찰되었습니다. 결과를 확인하세요.",
+		); err != nil {
+			slog.Warn("bid scheduler: notify on open failed", "rfq_id", id, "error", err)
+		}
 	}
 
 	return nil
+}
+
+// expirePQ flips every approved supplier_qualifications row whose valid_until
+// has passed into 'expired'. Returns the affected IDs so the caller can
+// audit-log each transition. No-op when the supplier_qualifications table
+// isn't present (older deployments).
+func (s *Scheduler) expirePQ(ctx context.Context) ([]string, error) {
+	var tableExists bool
+	if err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS(SELECT 1 FROM information_schema.tables
+		               WHERE table_schema='data' AND table_name='supplier_qualifications')`,
+	).Scan(&tableExists); err != nil || !tableExists {
+		return nil, nil //nolint:nilerr
+	}
+	rows, err := s.pool.Query(ctx, `
+		UPDATE data.supplier_qualifications
+		   SET status = 'expired', updated_at = now()
+		 WHERE status = 'approved'
+		   AND valid_until IS NOT NULL
+		   AND valid_until < CURRENT_DATE
+		   AND deleted_at IS NULL
+		RETURNING id::text`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 // transition runs an UPDATE that matches (fromStatus AND timeColumn <= now())

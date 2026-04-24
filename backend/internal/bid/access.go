@@ -118,6 +118,24 @@ func MaskSealedFields(
 	}
 }
 
+// IsAuctionBidRow reports whether the bid row belongs to an RFQ running in
+// live reverse-auction mode. In that mode the sealed mask is deliberately
+// bypassed — the whole point is that every bidder sees the current best
+// price and can undercut in real time.
+//
+// The check relies on the caller having expanded the `rfq` relation before
+// calling (handlers for bid-role=bid do this automatically). If the relation
+// is unresolved (just a UUID string) we return false — fail safe by keeping
+// the mask on rather than leaking sealed values because of a missing expand.
+func IsAuctionBidRow(row map[string]any) bool {
+	rel, ok := row["rfq"].(map[string]any)
+	if !ok {
+		return false
+	}
+	mode, _ := rel["mode"].(string)
+	return mode == "auction"
+}
+
 // IsRowOpened reports whether the row's status value matches the unlock list
 // of any sealed field on this collection. Used by audit logging to distinguish
 // reads against still-sealed rows ('read_sealed') from reads after the RFQ
