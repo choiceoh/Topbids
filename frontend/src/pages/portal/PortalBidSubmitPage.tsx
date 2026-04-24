@@ -1,11 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { FormProvider, useForm } from 'react-hook-form'
 import { useNavigate, useParams } from 'react-router'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
+import ConfirmDialog from '@/components/common/ConfirmDialog'
 import ErrorState from '@/components/common/ErrorState'
 import { FormField } from '@/components/common/Form'
 import LoadingState from '@/components/common/LoadingState'
@@ -16,6 +17,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useCurrentUser } from '@/hooks/useAuth'
 import { api, formatError } from '@/lib/api'
+import { formatDateTimeKR, formatDeadlineRelative } from '@/lib/datetime'
 import type { EntryRow } from '@/lib/types'
 
 // RHF registers <input type="number"> with valueAsNumber:true so the form
@@ -29,17 +31,8 @@ const schema = z.object({
 
 type BidForm = z.infer<typeof schema>
 
-function formatDate(iso: unknown): string {
-  if (typeof iso !== 'string' || !iso) return '-'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '-'
-  return d.toLocaleString('ko-KR', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+function formatMoney(n: number): string {
+  return n.toLocaleString('ko-KR') + ' 원'
 }
 
 /**
@@ -139,6 +132,11 @@ export default function PortalBidSubmitPage() {
     onError: (err) => toast.error(formatError(err)),
   })
 
+  // Confirmation state — first click on "제출" opens the dialog so an
+  // accidental enter-key or double-click can't submit a bid unsupervised.
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [pendingValues, setPendingValues] = useState<BidForm | null>(null)
+
   if (rfqQuery.isLoading) return <LoadingState />
   if (rfqQuery.isError)
     return <ErrorState error={rfqQuery.error} onRetry={() => rfqQuery.refetch()} />
@@ -146,7 +144,10 @@ export default function PortalBidSubmitPage() {
 
   const rfq = rfqQuery.data
   const rfqStatus = String(rfq.status ?? '')
-  const editable = rfqStatus === 'published'
+  const deadlinePassed = rfq.deadline_at
+    ? new Date(String(rfq.deadline_at)).getTime() <= Date.now()
+    : false
+  const editable = rfqStatus === 'published' && !deadlinePassed
 
   return (
     <div>
@@ -160,9 +161,18 @@ export default function PortalBidSubmitPage() {
       />
 
       <Card className="mb-6 p-5">
-        <h2 className="text-base font-semibold text-foreground">
-          {String(rfq.title ?? '')}
-        </h2>
+        <div className="flex items-start justify-between gap-4">
+          <h2 className="text-base font-semibold text-foreground">
+            {String(rfq.title ?? '')}
+          </h2>
+          <span
+            className={`shrink-0 text-xs font-medium ${
+              deadlinePassed || !editable ? 'text-amber-600' : 'text-foreground'
+            }`}
+          >
+            {formatDeadlineRelative(rfq.deadline_at)}
+          </span>
+        </div>
         <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-xs text-muted-foreground md:grid-cols-4">
           <div>
             <dt className="text-muted-foreground/70">공고번호</dt>
@@ -174,25 +184,29 @@ export default function PortalBidSubmitPage() {
           </div>
           <div>
             <dt className="text-muted-foreground/70">입찰마감</dt>
-            <dd className="text-foreground">{formatDate(rfq.deadline_at)}</dd>
+            <dd className="text-foreground">{formatDateTimeKR(rfq.deadline_at)}</dd>
           </div>
           <div>
             <dt className="text-muted-foreground/70">개찰일시</dt>
-            <dd className="text-foreground">{formatDate(rfq.open_at)}</dd>
+            <dd className="text-foreground">{formatDateTimeKR(rfq.open_at)}</dd>
           </div>
         </dl>
       </Card>
 
       {!editable && (
         <Card className="mb-6 border-amber-500/40 bg-amber-50/40 p-4 text-sm">
-          이 공고는 현재 입찰을 받지 않습니다 (상태: {rfqStatus}). 제출된 내용은 참고용으로만
-          표시됩니다.
+          이 공고는 현재 입찰을 받지 않습니다
+          {deadlinePassed ? ' (마감 시간 경과)' : ` (상태: ${rfqStatus})`}.
+          이미 제출한 내용은 참고용으로만 표시됩니다.
         </Card>
       )}
 
       <FormProvider {...form}>
         <form
-          onSubmit={form.handleSubmit((v) => mutation.mutate(v))}
+          onSubmit={form.handleSubmit((v) => {
+            setPendingValues(v)
+            setConfirmOpen(true)
+          })}
           className="space-y-5 rounded-lg border border-border bg-white p-6"
         >
           <div className="grid gap-5 md:grid-cols-2">
@@ -234,6 +248,26 @@ export default function PortalBidSubmitPage() {
             </Button>
           </div>
         </form>
+
+        <ConfirmDialog
+          open={confirmOpen}
+          onOpenChange={setConfirmOpen}
+          title={existing ? '입찰서를 수정할까요?' : '입찰서를 제출할까요?'}
+          description={
+            pendingValues
+              ? `입찰금액 ${formatMoney(pendingValues.total_amount)}` +
+                (pendingValues.lead_time != null
+                  ? ` · 납기 ${pendingValues.lead_time}일`
+                  : '') +
+                '\n제출 후에도 공고가 마감되기 전까지는 수정할 수 있습니다.'
+              : ''
+          }
+          confirmLabel={existing ? '수정' : '제출'}
+          loading={mutation.isPending}
+          onConfirm={() => {
+            if (pendingValues) mutation.mutate(pendingValues)
+          }}
+        />
       </FormProvider>
     </div>
   )

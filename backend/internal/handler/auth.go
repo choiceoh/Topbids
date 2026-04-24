@@ -245,10 +245,13 @@ func CreateUser(pool *pgxpool.Pool) http.HandlerFunc {
 			Role         string  `json:"role"`
 			DepartmentID *string `json:"department_id"`
 			SubsidiaryID *string `json:"subsidiary_id"`
-			Position     *string `json:"position"`
-			Title        *string `json:"title"`
-			Phone        *string `json:"phone"`
-			JoinedAt     *string `json:"joined_at"`
+			// SupplierID is required when Role == "supplier" and must reference
+			// a row in data.suppliers. Ignored for other roles.
+			SupplierID *string `json:"supplier_id"`
+			Position   *string `json:"position"`
+			Title      *string `json:"title"`
+			Phone      *string `json:"phone"`
+			JoinedAt   *string `json:"joined_at"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 			apierr.BadRequest("invalid request body").Write(w)
@@ -264,6 +267,28 @@ func CreateUser(pool *pgxpool.Pool) http.HandlerFunc {
 
 		switch input.Role {
 		case RoleDirector, RolePM, RoleEngineer, RoleViewer:
+		case RoleSupplier:
+			// Suppliers must link to a company row; otherwise SupplierRowFilter
+			// locks them out and the account is unusable. Validate the linkage
+			// exists rather than trusting a raw id — saves a confusing 403
+			// later when the user first tries to list bids.
+			if input.SupplierID == nil || *input.SupplierID == "" {
+				apierr.BadRequest("supplier_id is required for role=supplier").Write(w)
+				return
+			}
+			var exists bool
+			if err := pool.QueryRow(r.Context(),
+				`SELECT EXISTS(SELECT 1 FROM data.suppliers WHERE id = $1 AND deleted_at IS NULL)`,
+				*input.SupplierID,
+			).Scan(&exists); err != nil {
+				slog.Error("create user: verify supplier", "error", err)
+				apierr.WrapInternal("verify supplier", err).Write(w)
+				return
+			}
+			if !exists {
+				apierr.BadRequest("supplier_id does not reference an active supplier").Write(w)
+				return
+			}
 		default:
 			apierr.BadRequest("invalid role").Write(w)
 			return
@@ -276,20 +301,31 @@ func CreateUser(pool *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 
-		// Normalize empty IDs to nil.
+		// Normalize empty IDs to nil. Suppliers don't belong to a department
+		// or subsidiary — clear those even if the client sent them.
 		if input.DepartmentID != nil && *input.DepartmentID == "" {
 			input.DepartmentID = nil
 		}
 		if input.SubsidiaryID != nil && *input.SubsidiaryID == "" {
 			input.SubsidiaryID = nil
 		}
+		if input.Role == RoleSupplier {
+			input.DepartmentID = nil
+			input.SubsidiaryID = nil
+		} else {
+			input.SupplierID = nil
+		}
 
 		var id string
 		err = pool.QueryRow(r.Context(),
-			`INSERT INTO auth.users (email, name, password, role, department_id, subsidiary_id, position, title, phone, joined_at)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+			`INSERT INTO auth.users
+			   (email, name, password, role, department_id, subsidiary_id,
+			    supplier_id, position, title, phone, joined_at)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			 RETURNING id`,
 			email, input.Name, string(hash), input.Role,
-			input.DepartmentID, input.SubsidiaryID, input.Position, input.Title, input.Phone, input.JoinedAt,
+			input.DepartmentID, input.SubsidiaryID, input.SupplierID,
+			input.Position, input.Title, input.Phone, input.JoinedAt,
 		).Scan(&id)
 		if err != nil {
 			var pgErr *pgconn.PgError
@@ -311,7 +347,7 @@ func CreateUser(pool *pgxpool.Pool) http.HandlerFunc {
 func ListUsers(pool *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := `SELECT u.id, u.email, u.name, u.role, u.is_active,
-		             u.external_id, u.department_id, u.subsidiary_id,
+		             u.external_id, u.department_id, u.subsidiary_id, u.supplier_id,
 		             u.position, u.title, u.phone, u.avatar, u.joined_at,
 		             u.created_at, u.updated_at,
 		             d.name AS department_name,
@@ -350,7 +386,7 @@ func ListUsers(pool *pgxpool.Pool) http.HandlerFunc {
 			var u User
 			if err := rows.Scan(
 				&u.ID, &u.Email, &u.Name, &u.Role, &u.IsActive,
-				&u.ExternalID, &u.DepartmentID, &u.SubsidiaryID,
+				&u.ExternalID, &u.DepartmentID, &u.SubsidiaryID, &u.SupplierID,
 				&u.Position, &u.Title, &u.Phone, &u.Avatar, &u.JoinedAt,
 				&u.CreatedAt, &u.UpdatedAt,
 				&u.DepartmentName, &u.SubsidiaryName,
@@ -427,6 +463,7 @@ func UpdateUser(pool *pgxpool.Pool) http.HandlerFunc {
 			IsActive     *bool   `json:"is_active"`
 			DepartmentID *string `json:"department_id"`
 			SubsidiaryID *string `json:"subsidiary_id"`
+			SupplierID   *string `json:"supplier_id"`
 			Position     *string `json:"position"`
 			Title        *string `json:"title"`
 			Phone        *string `json:"phone"`
@@ -458,12 +495,48 @@ func UpdateUser(pool *pgxpool.Pool) http.HandlerFunc {
 		}
 		if input.Role != nil {
 			switch *input.Role {
-			case RoleDirector, RolePM, RoleEngineer, RoleViewer:
+			case RoleDirector, RolePM, RoleEngineer, RoleViewer, RoleSupplier:
 			default:
 				apierr.BadRequest("invalid role").Write(w)
 				return
 			}
 			addSet("role", *input.Role)
+			// Switching to supplier: supplier_id must be set — either in this
+			// same request body or already on the row. Reject the update
+			// rather than let the account become unusable.
+			if *input.Role == RoleSupplier {
+				hasSupplier := input.SupplierID != nil && *input.SupplierID != ""
+				if !hasSupplier {
+					var existing *string
+					err := pool.QueryRow(r.Context(),
+						`SELECT supplier_id::text FROM auth.users WHERE id = $1`, userID,
+					).Scan(&existing)
+					if err != nil || existing == nil || *existing == "" {
+						apierr.BadRequest("switching to role=supplier requires supplier_id").Write(w)
+						return
+					}
+				}
+			}
+		}
+		if input.SupplierID != nil {
+			if *input.SupplierID == "" {
+				addSet("supplier_id", nil)
+			} else {
+				var exists bool
+				if err := pool.QueryRow(r.Context(),
+					`SELECT EXISTS(SELECT 1 FROM data.suppliers WHERE id = $1 AND deleted_at IS NULL)`,
+					*input.SupplierID,
+				).Scan(&exists); err != nil {
+					slog.Error("update user: verify supplier", "error", err)
+					apierr.WrapInternal("verify supplier", err).Write(w)
+					return
+				}
+				if !exists {
+					apierr.BadRequest("supplier_id does not reference an active supplier").Write(w)
+					return
+				}
+				addSet("supplier_id", *input.SupplierID)
+			}
 		}
 		if input.IsActive != nil {
 			addSet("is_active", *input.IsActive)

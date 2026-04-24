@@ -19,6 +19,13 @@ func BidPresets() []Preset {
 }
 
 // suppliersPreset — 공급사 마스터.
+//
+// Access: suppliers are master data managed by internal buyers. Everyone
+// authenticated can read (so suppliers can view their own profile and
+// internal users can resolve relation labels), but only director/pm can
+// mutate. Leaving a write list empty would fall through to "open to all"
+// in AllowsRole — we enumerate explicitly so supplier-role can't impersonate
+// other companies by editing suppliers rows.
 func suppliersPreset() Preset {
 	return Preset{
 		Slug:        "suppliers",
@@ -26,7 +33,11 @@ func suppliersPreset() Preset {
 		Description: "입찰 참여 공급사 마스터",
 		Icon:        "briefcase",
 		AccessConfig: &schema.AccessConfig{
-			BidRole: schema.BidRoleSupplier,
+			BidRole:     schema.BidRoleSupplier,
+			EntryView:   []string{"director", "pm", "engineer", "viewer", "supplier"},
+			EntryCreate: []string{"director", "pm"},
+			EntryEdit:   []string{"director", "pm"},
+			EntryDelete: []string{"director", "pm"},
 		},
 		Fields: []schema.CreateFieldIn{
 			{Slug: "name", Label: "공급사명", FieldType: schema.FieldText, IsRequired: true, IsIndexed: true, Width: 3},
@@ -60,6 +71,11 @@ func suppliersPreset() Preset {
 }
 
 // rfqsPreset — 입찰 공고.
+//
+// Access: suppliers must read RFQs to decide whether to bid, but must not
+// create/edit/delete them (that would let a bidder forge public notices).
+// Internal buyers (pm/engineer) author and edit; only director/pm can delete
+// (to preserve history).
 func rfqsPreset() Preset {
 	return Preset{
 		Slug:        "rfqs",
@@ -67,7 +83,11 @@ func rfqsPreset() Preset {
 		Description: "그룹 통합 구매 입찰 공고",
 		Icon:        "file-text",
 		AccessConfig: &schema.AccessConfig{
-			BidRole: schema.BidRoleRfq,
+			BidRole:     schema.BidRoleRfq,
+			EntryView:   []string{"director", "pm", "engineer", "viewer", "supplier"},
+			EntryCreate: []string{"director", "pm", "engineer"},
+			EntryEdit:   []string{"director", "pm", "engineer"},
+			EntryDelete: []string{"director", "pm"},
 		},
 		Fields: []schema.CreateFieldIn{
 			{Slug: "rfq_no", Label: "공고번호", FieldType: schema.FieldText, IsRequired: true, IsUnique: true, IsIndexed: true, Width: 3},
@@ -147,6 +167,14 @@ func purchaseOrdersPreset() Preset {
 		Icon:        "package",
 		AccessConfig: &schema.AccessConfig{
 			BidRole: schema.BidRolePO,
+			// POs are authored by DistributePO (server-side SQL); no API
+			// create/delete. Only director/pm can edit (e.g. adjust status or
+			// note after shipping). Suppliers need read to track their own POs
+			// — SupplierRowFilter keeps them to their own rows.
+			EntryView:   []string{"director", "pm", "engineer", "viewer", "supplier"},
+			EntryCreate: []string{"director", "pm"},
+			EntryEdit:   []string{"director", "pm"},
+			EntryDelete: []string{"director", "pm"},
 		},
 		Fields: []schema.CreateFieldIn{
 			{Slug: "po_no", Label: "발주번호", FieldType: schema.FieldText, IsRequired: true, IsUnique: true, IsIndexed: true, Width: 3},
@@ -178,6 +206,11 @@ func purchaseOrdersPreset() Preset {
 // Fields carrying sealed options: total_amount, lead_time. sealed_until_at
 // references the parent RFQ row's open_at (resolved at read time by
 // SealedReadFilter via the "rfq" relation).
+//
+// Access: suppliers submit and edit their own bids (row-ownership enforced
+// by bid.EnforceBidWriteOwnership — AccessConfig only gates role-level).
+// Internal buyers read all for evaluation. Deletion is restricted to
+// director/pm for audit integrity; suppliers cannot retract once submitted.
 func bidsPreset() Preset {
 	return Preset{
 		Slug:        "bids",
@@ -185,7 +218,11 @@ func bidsPreset() Preset {
 		Description: "공급사별 입찰 제출 내역",
 		Icon:        "gavel",
 		AccessConfig: &schema.AccessConfig{
-			BidRole: schema.BidRoleBid,
+			BidRole:     schema.BidRoleBid,
+			EntryView:   []string{"director", "pm", "engineer", "viewer", "supplier"},
+			EntryCreate: []string{"director", "pm", "engineer", "supplier"},
+			EntryEdit:   []string{"director", "pm", "engineer", "supplier"},
+			EntryDelete: []string{"director", "pm"},
 		},
 		Fields: []schema.CreateFieldIn{
 			{

@@ -63,6 +63,7 @@ export const ROLE_LABELS: Record<string, string> = {
   pm: '운영자',
   engineer: '담당자',
   viewer: '열람자',
+  supplier: '공급사',
 }
 
 export const ON_DELETE_OPTIONS = [

@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -377,6 +378,14 @@ func (h *DynHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Topbids write guard for supplier callers on the bids collection:
+	// forces body["supplier"] = caller's supplier_id and requires the parent
+	// RFQ to be in 'published' state. No-op for non-bid collections and
+	// non-supplier roles.
+	if !h.enforceBidWrite(w, r, col, bid.OpCreate, "", body) {
+		return
+	}
+
 	// Separate M:N field values — they go to junction tables, not the main INSERT.
 	m2mValues := make(map[string][]string)
 	for _, f := range fields {
@@ -567,6 +576,13 @@ func (h *DynHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	if err := validatePayload(r.Context(), h.pool, h.cache, body, fields, false); err != nil {
 		handleErr(w, r, err)
+		return
+	}
+
+	// Topbids write guard (mirror of Create): for bid-role=bid with supplier
+	// caller, verify the target row belongs to their company and the parent
+	// RFQ is still accepting changes.
+	if !h.enforceBidWrite(w, r, col, bid.OpUpdate, id, body) {
 		return
 	}
 
@@ -1185,6 +1201,9 @@ func (h *DynHandler) BulkCreate(w http.ResponseWriter, r *http.Request) {
 	if !h.checkAccess(w, r, col, "entry_create") {
 		return
 	}
+	if !h.rejectSupplierBulkOnBids(w, r, col) {
+		return
+	}
 
 	var bodies []map[string]any
 	if err := readJSON(r, &bodies); err != nil {
@@ -1275,6 +1294,9 @@ func (h *DynHandler) BulkDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !h.checkAccess(w, r, col, "entry_delete") {
+		return
+	}
+	if !h.rejectSupplierBulkOnBids(w, r, col) {
 		return
 	}
 
@@ -1445,6 +1467,9 @@ func (h *DynHandler) BatchUpdate(w http.ResponseWriter, r *http.Request) {
 	if !h.checkAccess(w, r, col, "entry_edit") {
 		return
 	}
+	if !h.rejectSupplierBulkOnBids(w, r, col) {
+		return
+	}
 
 	var body struct {
 		Updates []struct {
@@ -1590,6 +1615,14 @@ func (h *DynHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Topbids write guard — redundant given the bids preset excludes supplier
+	// from entry_delete, but defence in depth: even if access_config is ever
+	// loosened, a supplier still can't delete rows they don't own or after
+	// the RFQ closes.
+	if !h.enforceBidWrite(w, r, col, bid.OpDelete, id, nil) {
+		return
+	}
+
 	qTable := pgutil.QuoteQualified("data", col.Slug)
 	user, _ := middleware.GetUser(r.Context())
 
@@ -1632,6 +1665,55 @@ func (h *DynHandler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 // --- helpers ---
+
+// rejectSupplierBulkOnBids blocks supplier-role callers from bulk endpoints
+// on bid-role=bid collections. Suppliers submit one bid per RFQ — any bulk
+// path would let them either create many bids at once (gaming the system)
+// or sidestep the per-row write guard in single endpoints. Internal roles
+// still use bulk for admin work.
+func (h *DynHandler) rejectSupplierBulkOnBids(w http.ResponseWriter, r *http.Request, col schema.Collection) bool {
+	if col.AccessConfig.BidRole != schema.BidRoleBid {
+		return true
+	}
+	user, _ := middleware.GetUser(r.Context())
+	if user.Role == "supplier" {
+		writeError(w, http.StatusForbidden, "bulk operations not allowed on bids for supplier role")
+		return false
+	}
+	return true
+}
+
+// enforceBidWrite applies bid-collection write invariants (Topbids-specific)
+// after the generic role-level checkAccess has passed. For bid-role=bid
+// collections with a supplier caller, this:
+//
+//   - forces body["supplier"] to the caller's supplier_id on create
+//   - verifies row ownership on update/delete
+//   - rejects writes once the parent RFQ has left 'published' state
+//
+// Returns true to continue, false if the response has already been written.
+// Non-bid collections and non-supplier callers pass through unchanged.
+func (h *DynHandler) enforceBidWrite(w http.ResponseWriter, r *http.Request, col schema.Collection, op, id string, body map[string]any) bool {
+	if col.AccessConfig.BidRole != schema.BidRoleBid {
+		return true
+	}
+	user, _ := middleware.GetUser(r.Context())
+	err := bid.EnforceBidWriteOwnership(r.Context(), h.pool, user.Role, user.SupplierID, op, id, body)
+	if err == nil {
+		return true
+	}
+	switch {
+	case errors.Is(err, bid.ErrNotBidOwner),
+		errors.Is(err, bid.ErrSupplierNotLinked),
+		errors.Is(err, bid.ErrRFQNotAcceptingBids):
+		writeError(w, http.StatusForbidden, err.Error())
+	case errors.Is(err, bid.ErrRFQMissing):
+		writeError(w, http.StatusBadRequest, err.Error())
+	default:
+		handleErr(w, r, err)
+	}
+	return false
+}
 
 // checkAccess verifies the current user is allowed the given operation (e.g.,
 // "entry_view", "entry_create", "entry_edit", "entry_delete") on the collection's
