@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useQuery } from '@tanstack/react-query'
 import { FormProvider, useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -21,37 +22,45 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useCreateUser, useUpdateUser } from '@/hooks/useUsers'
-import { formatError } from '@/lib/api'
+import { api, formatError } from '@/lib/api'
 import { ROLE_LABELS } from '@/lib/constants'
-import type { Department, Subsidiary, User } from '@/lib/types'
+import type { Department, EntryRow, Subsidiary, User } from '@/lib/types'
 
 const NONE = '__none__'
 
-const createSchema = z.object({
+// `supplier_id` is required at submit time when role=supplier but we express
+// that invariant as a refine rather than branching the schema union — keeps
+// a single form shape for RHF.
+const baseShape = {
   email: z.string().email('이메일 형식이 올바르지 않습니다'),
   name: z.string().min(1, '이름을 입력하세요'),
-  password: z.string().min(6, '6자 이상 입력하세요'),
-  role: z.enum(['director', 'pm', 'engineer', 'viewer']),
+  role: z.enum(['director', 'pm', 'engineer', 'viewer', 'supplier']),
   subsidiary_id: z.string().optional(),
   department_id: z.string().optional(),
+  supplier_id: z.string().optional(),
   position: z.string().optional(),
   title: z.string().optional(),
   phone: z.string().optional(),
   joined_at: z.string().optional(),
-})
+}
 
-const editSchema = z.object({
-  email: z.string().email('이메일 형식이 올바르지 않습니다'),
-  name: z.string().min(1, '이름을 입력하세요'),
-  password: z.string().optional(),
-  role: z.enum(['director', 'pm', 'engineer', 'viewer']),
-  subsidiary_id: z.string().optional(),
-  department_id: z.string().optional(),
-  position: z.string().optional(),
-  title: z.string().optional(),
-  phone: z.string().optional(),
-  joined_at: z.string().optional(),
-})
+const requireSupplierWhenRoleIs = (v: { role: string; supplier_id?: string }, ctx: z.RefinementCtx) => {
+  if (v.role === 'supplier' && (!v.supplier_id || v.supplier_id === NONE)) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['supplier_id'],
+      message: '공급사를 선택하세요',
+    })
+  }
+}
+
+const createSchema = z
+  .object({ ...baseShape, password: z.string().min(6, '6자 이상 입력하세요') })
+  .superRefine(requireSupplierWhenRoleIs)
+
+const editSchema = z
+  .object({ ...baseShape, password: z.string().optional() })
+  .superRefine(requireSupplierWhenRoleIs)
 
 type CreateForm = z.infer<typeof createSchema>
 type EditForm = z.infer<typeof editSchema>
@@ -69,21 +78,16 @@ export default function UserFormDialog({ user, departments, subsidiaries, onClos
   const createUser = useCreateUser()
   const updateUser = useUpdateUser()
 
-  // This dialog only manages internal roles. Supplier accounts are provisioned
-  // separately (seed/scripted) — if somehow opened on a supplier, coerce to
-  // the safest default so the select has a valid initial value.
-  const initialRole: 'director' | 'pm' | 'engineer' | 'viewer' =
-    user?.role === 'supplier' ? 'viewer' : user?.role ?? 'viewer'
-
   const form = useForm<CreateForm | EditForm>({
     resolver: zodResolver(isEdit ? editSchema : createSchema),
     defaultValues: {
       email: user?.email ?? '',
       name: user?.name ?? '',
       password: '',
-      role: initialRole,
+      role: user?.role ?? 'viewer',
       subsidiary_id: user?.subsidiary_id ?? NONE,
       department_id: user?.department_id ?? NONE,
+      supplier_id: user?.supplier_id ?? NONE,
       position: user?.position ?? '',
       title: user?.title ?? '',
       phone: user?.phone ?? '',
@@ -91,9 +95,26 @@ export default function UserFormDialog({ user, departments, subsidiaries, onClos
     },
   })
 
+  const role = form.watch('role')
+  const isSupplier = role === 'supplier'
+
+  // Lazy-load the suppliers list only when the role select is set to
+  // supplier — the admin may not touch supplier-related fields for most
+  // user edits, and skipping the query keeps the dialog snappy.
+  const suppliersQuery = useQuery({
+    queryKey: ['admin', 'suppliers-for-user-dialog'],
+    queryFn: () =>
+      api.getList<EntryRow>('/data/suppliers?sort=name&limit=500'),
+    enabled: isSupplier,
+  })
+
   function onSubmit(values: CreateForm | EditForm) {
-    const deptId = values.department_id === NONE ? '' : values.department_id
-    const subId = values.subsidiary_id === NONE ? '' : values.subsidiary_id
+    const deptId = isSupplier ? '' : values.department_id === NONE ? '' : values.department_id
+    const subId = isSupplier ? '' : values.subsidiary_id === NONE ? '' : values.subsidiary_id
+    const supId =
+      isSupplier && values.supplier_id && values.supplier_id !== NONE
+        ? values.supplier_id
+        : null
 
     if (isEdit) {
       updateUser.mutate(
@@ -104,6 +125,7 @@ export default function UserFormDialog({ user, departments, subsidiaries, onClos
           role: values.role,
           subsidiary_id: subId || null,
           department_id: deptId || null,
+          supplier_id: supId,
           position: values.position ?? '',
           title: values.title ?? '',
           phone: values.phone ?? '',
@@ -128,6 +150,7 @@ export default function UserFormDialog({ user, departments, subsidiaries, onClos
           role: v.role,
           subsidiary_id: subId || null,
           department_id: deptId || null,
+          supplier_id: supId,
           position: v.position ?? '',
           title: v.title ?? '',
           phone: v.phone ?? '',
@@ -190,53 +213,84 @@ export default function UserFormDialog({ user, departments, subsidiaries, onClos
               </FormField>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField<CreateForm | EditForm> name="subsidiary_id" label="계열사">
+            {isSupplier ? (
+              <FormField<CreateForm | EditForm>
+                name="supplier_id"
+                label="공급사"
+                required
+                description="포털에서 이 사용자가 조회·제출할 수 있는 회사를 지정합니다"
+              >
                 <Select
-                  value={form.watch('subsidiary_id') || NONE}
-                  onValueChange={(v) => {
-                    form.setValue('subsidiary_id', v ?? NONE)
-                    form.setValue('department_id', NONE)
-                  }}
+                  value={form.watch('supplier_id') || NONE}
+                  onValueChange={(v) => form.setValue('supplier_id', v ?? NONE)}
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue
+                      placeholder={
+                        suppliersQuery.isLoading ? '공급사 불러오는 중…' : '공급사 선택'
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={NONE}>미지정</SelectItem>
-                    {subsidiaries.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
+                    <SelectItem value={NONE}>미선택</SelectItem>
+                    {(suppliersQuery.data?.data ?? []).map((s) => (
+                      <SelectItem key={String(s.id)} value={String(s.id)}>
+                        {String(s.name ?? '(이름 없음)')}
+                        {s.biz_no ? ` · ${String(s.biz_no)}` : ''}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </FormField>
-              <FormField<CreateForm | EditForm> name="department_id" label="부서">
-                <Select
-                  value={form.watch('department_id') || NONE}
-                  onValueChange={(v) => form.setValue('department_id', v ?? NONE)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NONE}>미지정</SelectItem>
-                    {departments
-                      .filter((d) => {
-                        const selectedSub = form.watch('subsidiary_id')
-                        if (!selectedSub || selectedSub === NONE) return true
-                        return d.subsidiary_id === selectedSub
-                      })
-                      .map((d) => (
-                        <SelectItem key={d.id} value={d.id}>
-                          {d.name}
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                <FormField<CreateForm | EditForm> name="subsidiary_id" label="계열사">
+                  <Select
+                    value={form.watch('subsidiary_id') || NONE}
+                    onValueChange={(v) => {
+                      form.setValue('subsidiary_id', v ?? NONE)
+                      form.setValue('department_id', NONE)
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NONE}>미지정</SelectItem>
+                      {subsidiaries.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name}
                         </SelectItem>
                       ))}
-                  </SelectContent>
-                </Select>
-              </FormField>
-            </div>
+                    </SelectContent>
+                  </Select>
+                </FormField>
+                <FormField<CreateForm | EditForm> name="department_id" label="부서">
+                  <Select
+                    value={form.watch('department_id') || NONE}
+                    onValueChange={(v) => form.setValue('department_id', v ?? NONE)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NONE}>미지정</SelectItem>
+                      {departments
+                        .filter((d) => {
+                          const selectedSub = form.watch('subsidiary_id')
+                          if (!selectedSub || selectedSub === NONE) return true
+                          return d.subsidiary_id === selectedSub
+                        })
+                        .map((d) => (
+                          <SelectItem key={d.id} value={d.id}>
+                            {d.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </FormField>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <FormField<CreateForm | EditForm> name="position" label="직위">

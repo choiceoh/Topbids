@@ -22,6 +22,7 @@ export function useCreateUser() {
       role: string
       subsidiary_id?: string | null
       department_id?: string | null
+      supplier_id?: string | null
       position?: string
       title?: string
       phone?: string
@@ -42,6 +43,7 @@ export function useUpdateUser() {
       is_active?: boolean
       subsidiary_id?: string | null
       department_id?: string | null
+      supplier_id?: string | null
       position?: string
       title?: string
       phone?: string
