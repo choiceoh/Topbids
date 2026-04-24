@@ -148,14 +148,28 @@ func (h *DynHandler) List(w http.ResponseWriter, r *http.Request) {
 		}())
 	}
 
-	// Topbids supplier row filter: suppliers on a bids or purchase_orders
-	// collection see only rows where the "supplier" column matches their
-	// own SupplierID.
+	// Topbids row filters for supplier-role callers:
+	//   - bids, purchase_orders: restrict to rows owned via the "supplier"
+	//     column (the target row references their company)
+	//   - suppliers: restrict to the caller's own row by id (hides
+	//     competitors' contact info and biz_no)
 	supplierClause := ""
-	if col.AccessConfig.BidRole == schema.BidRoleBid || col.AccessConfig.BidRole == schema.BidRolePO {
+	switch col.AccessConfig.BidRole {
+	case schema.BidRoleBid, schema.BidRolePO:
 		if sql, bidArgs, active := bid.SupplierRowFilter(user.Role, user.SupplierID, len(args)+1); active {
 			supplierClause = " AND " + sql
 			args = append(args, bidArgs...)
+		}
+	case schema.BidRoleSupplier:
+		if sql, bidArgs, active := bid.SupplierSelfRowFilter(user.Role, user.SupplierID, len(args)+1); active {
+			supplierClause = " AND " + sql
+			args = append(args, bidArgs...)
+		}
+	case schema.BidRoleRfq:
+		// Hide invited/private RFQs from discovery lists. Direct Get still
+		// works for suppliers who have the URL.
+		if sql, active := bid.RfqListModeFilter(user.Role); active {
+			supplierClause = " AND " + sql
 		}
 	}
 
@@ -271,8 +285,14 @@ func (h *DynHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	// Topbids supplier row filter (mirror of List handler).
 	supplierGet := ""
-	if col.AccessConfig.BidRole == schema.BidRoleBid || col.AccessConfig.BidRole == schema.BidRolePO {
+	switch col.AccessConfig.BidRole {
+	case schema.BidRoleBid, schema.BidRolePO:
 		if sql, bidArgs, active := bid.SupplierRowFilter(user.Role, user.SupplierID, len(getArgs)+1); active {
+			supplierGet = " AND " + sql
+			getArgs = append(getArgs, bidArgs...)
+		}
+	case schema.BidRoleSupplier:
+		if sql, bidArgs, active := bid.SupplierSelfRowFilter(user.Role, user.SupplierID, len(getArgs)+1); active {
 			supplierGet = " AND " + sql
 			getArgs = append(getArgs, bidArgs...)
 		}

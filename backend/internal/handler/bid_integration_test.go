@@ -226,6 +226,96 @@ func TestBidGuard_WriteBlockedWhenRFQClosed(t *testing.T) {
 	}
 }
 
+func TestBidGuard_SupplierListOfSuppliersSeesSelfOnly(t *testing.T) {
+	env := setupBidEnv(t)
+
+	// Supplier lists /api/data/suppliers. Must return only their own row,
+	// never competitor records — that would leak biz_no / email / phone.
+	req := httptest.NewRequest("GET", "/api/data/suppliers", nil)
+	req = injectUser(req, supplierClaims(env.adminID, env.supplier))
+	w := httptest.NewRecorder()
+	env.router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("list suppliers: status=%d body=%s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Data  []map[string]any `json:"data"`
+		Total int64            `json:"total"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp.Total != 1 {
+		t.Errorf("supplier should see exactly 1 row (self), got %d", resp.Total)
+	}
+	if len(resp.Data) != 1 || resp.Data[0]["id"] != env.supplier {
+		t.Errorf("expected only own id %s, got %v", env.supplier, resp.Data)
+	}
+}
+
+func TestBidGuard_RfqListHidesInvitedFromSupplier(t *testing.T) {
+	env := setupBidEnv(t)
+
+	// Seed an invited-mode RFQ alongside the existing open-mode one.
+	if _, err := env.pool.Exec(context.Background(), `
+		INSERT INTO data.rfqs (rfq_no, title, mode, eval_method, sealed,
+		                        deadline_at, open_at, status, created_by)
+		VALUES ('RFQ-INV-001', 'invited-only', 'invited', 'lowest', true,
+		        now() + interval '3 hours', now() + interval '4 hours',
+		        'published', $1)`,
+		env.adminID,
+	); err != nil {
+		t.Fatalf("seed invited rfq: %v", err)
+	}
+
+	// Supplier lists RFQs — must see the open one but NOT the invited one.
+	req := httptest.NewRequest("GET", "/api/data/rfqs", nil)
+	req = injectUser(req, supplierClaims(env.adminID, env.supplier))
+	w := httptest.NewRecorder()
+	env.router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("list rfqs: status=%d body=%s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Data []map[string]any `json:"data"`
+	}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+
+	sawOpen := false
+	sawInvited := false
+	for _, row := range resp.Data {
+		switch row["mode"] {
+		case "open":
+			sawOpen = true
+		case "invited", "private":
+			sawInvited = true
+		}
+	}
+	if !sawOpen {
+		t.Error("supplier should see open-mode RFQs")
+	}
+	if sawInvited {
+		t.Error("supplier must NOT see invited/private RFQs in discovery list")
+	}
+
+	// Same list for a director — should include both.
+	dirReq := httptest.NewRequest("GET", "/api/data/rfqs", nil)
+	dirReq = injectUser(dirReq, middleware.UserClaims{
+		UserID: env.adminID, Role: "director", Name: "admin",
+	})
+	dirW := httptest.NewRecorder()
+	env.router.ServeHTTP(dirW, dirReq)
+	var dirResp struct {
+		Data []map[string]any `json:"data"`
+	}
+	json.Unmarshal(dirW.Body.Bytes(), &dirResp)
+	if len(dirResp.Data) < 2 {
+		t.Errorf("director should see all RFQs, got %d rows", len(dirResp.Data))
+	}
+}
+
 func TestBidGuard_SupplierCantSeeForeignBidViaGet(t *testing.T) {
 	env := setupBidEnv(t)
 

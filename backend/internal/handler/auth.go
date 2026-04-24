@@ -132,6 +132,30 @@ func Login(pool *pgxpool.Pool, limiter *middleware.RateLimiter, jwtSecret string
 			return
 		}
 
+		// Supplier accounts: propagate supplier row status. When a buyer marks
+		// a supplier company suspended/blacklisted, every account linked to
+		// that supplier must lose portal access immediately — previously the
+		// supplier_id was only used to scope bid rows, not block login.
+		if user.Role == RoleSupplier && user.SupplierID != nil && *user.SupplierID != "" {
+			var supStatus string
+			err := pool.QueryRow(r.Context(),
+				`SELECT status FROM data.suppliers WHERE id = $1 AND deleted_at IS NULL`,
+				*user.SupplierID,
+			).Scan(&supStatus)
+			switch {
+			case errors.Is(err, pgx.ErrNoRows):
+				apierr.Forbidden("linked supplier not found").Write(w)
+				return
+			case err != nil:
+				slog.Error("login: supplier status check", "error", err)
+				apierr.WrapInternal("check supplier status", err).Write(w)
+				return
+			case supStatus != "active":
+				apierr.Forbidden("공급사 계정이 정지 상태입니다").Write(w)
+				return
+			}
+		}
+
 		if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password)); err != nil {
 			if limiter != nil {
 				limiter.RecordFailure(ip)
