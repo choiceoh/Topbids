@@ -335,6 +335,58 @@ func Run(ctx context.Context, engine *migration.Engine, cache *schema.Cache) err
 		return fmt.Errorf("seed: sync bid access_config: %w", err)
 	}
 
+	// Also backfill any new optional fields added to bid presets after the
+	// initial install (attachments, estimated_price, min_win_rate, etc.).
+	// AddField is idempotent by (collection, slug) so this is safe to run
+	// on every boot.
+	if err := syncBidFields(ctx, engine, cache); err != nil {
+		return fmt.Errorf("seed: sync bid fields: %w", err)
+	}
+
+	return nil
+}
+
+// syncBidFields walks the bid preset fields and adds any that are missing
+// from the current collection schema. Relation and required-without-default
+// fields are skipped — the seed creates those at collection birth and adding
+// them later would fail on existing rows.
+//
+// Only runs for collections with a BidRole set, so human-edited custom apps
+// never get mutated by the seed.
+func syncBidFields(ctx context.Context, engine *migration.Engine, cache *schema.Cache) error {
+	presets := []func() Preset{
+		rfqsPreset, bidsPreset, purchaseOrdersPreset, suppliersPreset,
+		clarificationsPreset, supplierQualificationsPreset, bidEvaluationsPreset,
+	}
+	for _, pf := range presets {
+		p := pf()
+		col, exists := cache.CollectionBySlug(p.Slug)
+		if !exists {
+			continue
+		}
+		existing := make(map[string]bool, len(col.Fields))
+		for _, f := range cache.Fields(col.ID) {
+			existing[f.Slug] = true
+		}
+		for _, f := range p.Fields {
+			if existing[f.Slug] {
+				continue
+			}
+			// Can't retroactively add a NOT NULL column without a default on
+			// a non-empty table. Existing bid rows would violate the constraint.
+			// The preset authors are expected to mark new fields as optional.
+			if f.IsRequired {
+				slog.Warn("seed: skipping backfill of required field — add manually",
+					"slug", p.Slug, "field", f.Slug)
+				continue
+			}
+			req := f // copy
+			if _, _, err := engine.AddField(ctx, col.ID, &req, true); err != nil {
+				return fmt.Errorf("backfill %s.%s: %w", p.Slug, f.Slug, err)
+			}
+			slog.Info("seed: backfilled field", "collection", p.Slug, "field", f.Slug)
+		}
+	}
 	return nil
 }
 
@@ -346,7 +398,10 @@ func Run(ctx context.Context, engine *migration.Engine, cache *schema.Cache) err
 // Scope is narrowed to the bid presets (which have a BidRole set) so a
 // human-edited access_config on unrelated user apps never gets clobbered.
 func syncBidAccessConfig(ctx context.Context, engine *migration.Engine, cache *schema.Cache) error {
-	presets := []func() Preset{suppliersPreset, rfqsPreset, bidsPreset, purchaseOrdersPreset}
+	presets := []func() Preset{
+		suppliersPreset, rfqsPreset, bidsPreset, purchaseOrdersPreset,
+		clarificationsPreset, supplierQualificationsPreset, bidEvaluationsPreset,
+	}
 	for _, pf := range presets {
 		p := pf()
 		if p.AccessConfig == nil {
@@ -486,7 +541,100 @@ func applyBidRelations(ctx context.Context, engine *migration.Engine, cache *sch
 		return fmt.Errorf("bids collection unexpectedly missing after creation")
 	}
 
-	return createPurchaseOrdersCollection(ctx, engine, cache, rfqs.ID, bids.ID, suppliers.ID)
+	if err := createPurchaseOrdersCollection(ctx, engine, cache, rfqs.ID, bids.ID, suppliers.ID); err != nil {
+		return err
+	}
+
+	if err := createClarificationsCollection(ctx, engine, cache, rfqs.ID); err != nil {
+		return err
+	}
+
+	if err := createSupplierQualificationsCollection(ctx, engine, cache, suppliers.ID); err != nil {
+		return err
+	}
+
+	return createBidEvaluationsCollection(ctx, engine, cache, bids.ID)
+}
+
+// createBidEvaluationsCollection seeds the multi-evaluator scoring collection
+// with a relation back to bids. Populated by buyer staff after open_at; the
+// award pickWeighted step averages tech_score across rows.
+func createBidEvaluationsCollection(ctx context.Context, engine *migration.Engine, cache *schema.Cache, bidsID string) error {
+	if _, exists := cache.CollectionBySlug("bid_evaluations"); exists {
+		return nil
+	}
+	preset := bidEvaluationsPreset()
+	preset.Fields = append([]schema.CreateFieldIn{
+		{
+			Slug: "bid", Label: "입찰서", FieldType: schema.FieldRelation,
+			IsRequired: true, IsIndexed: true, Width: 3,
+			Relation: &schema.CreateRelIn{
+				TargetCollectionID: bidsID, RelationType: schema.RelOneToMany, OnDelete: "CASCADE",
+			},
+		},
+		{
+			Slug: "evaluator", Label: "평가자", FieldType: schema.FieldUser,
+			IsRequired: true, IsIndexed: true, Width: 3,
+		},
+	}, preset.Fields...)
+
+	col, err := engine.CreateCollection(ctx, presetToReq(preset))
+	if err != nil {
+		return fmt.Errorf("create bid_evaluations: %w", err)
+	}
+	slog.Info("seed: created collection", "slug", "bid_evaluations", "id", col.ID)
+	return nil
+}
+
+// createClarificationsCollection seeds the RFQ Q&A thread collection with a
+// relation back to rfqs. Separate from the base preset list because it
+// needs the rfqs.id for the relation field.
+func createClarificationsCollection(ctx context.Context, engine *migration.Engine, cache *schema.Cache, rfqsID string) error {
+	if _, exists := cache.CollectionBySlug("rfq_clarifications"); exists {
+		return nil
+	}
+	preset := clarificationsPreset()
+	preset.Fields = append([]schema.CreateFieldIn{
+		{
+			Slug: "rfq", Label: "입찰공고", FieldType: schema.FieldRelation,
+			IsRequired: true, IsIndexed: true, Width: 3,
+			Relation: &schema.CreateRelIn{
+				TargetCollectionID: rfqsID, RelationType: schema.RelOneToMany, OnDelete: "CASCADE",
+			},
+		},
+	}, preset.Fields...)
+
+	col, err := engine.CreateCollection(ctx, presetToReq(preset))
+	if err != nil {
+		return fmt.Errorf("create rfq_clarifications: %w", err)
+	}
+	slog.Info("seed: created collection", "slug", "rfq_clarifications", "id", col.ID)
+	return nil
+}
+
+// createSupplierQualificationsCollection seeds the PQ collection with a
+// relation back to suppliers. One row per (supplier, category).
+func createSupplierQualificationsCollection(ctx context.Context, engine *migration.Engine, cache *schema.Cache, suppliersID string) error {
+	if _, exists := cache.CollectionBySlug("supplier_qualifications"); exists {
+		return nil
+	}
+	preset := supplierQualificationsPreset()
+	preset.Fields = append([]schema.CreateFieldIn{
+		{
+			Slug: "supplier", Label: "공급사", FieldType: schema.FieldRelation,
+			IsRequired: true, IsIndexed: true, Width: 3,
+			Relation: &schema.CreateRelIn{
+				TargetCollectionID: suppliersID, RelationType: schema.RelOneToMany, OnDelete: "CASCADE",
+			},
+		},
+	}, preset.Fields...)
+
+	col, err := engine.CreateCollection(ctx, presetToReq(preset))
+	if err != nil {
+		return fmt.Errorf("create supplier_qualifications: %w", err)
+	}
+	slog.Info("seed: created collection", "slug", "supplier_qualifications", "id", col.ID)
+	return nil
 }
 
 func createBidsCollection(ctx context.Context, engine *migration.Engine, cache *schema.Cache, rfqsID, suppliersID string) error {
