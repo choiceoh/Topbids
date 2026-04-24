@@ -15,6 +15,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { api } from '@/lib/api'
+import { formatDateTimeKR } from '@/lib/datetime'
 import type { EntryRow } from '@/lib/types'
 
 const BID_STATUS_LABEL: Record<string, string> = {
@@ -33,19 +34,6 @@ const BID_STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | '
   evaluated: 'outline',
   awarded: 'default',
   rejected: 'destructive',
-}
-
-function formatDate(iso: unknown): string {
-  if (typeof iso !== 'string' || !iso) return '-'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '-'
-  return d.toLocaleString('ko-KR', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
 }
 
 function formatMoney(v: unknown): string {
@@ -124,7 +112,7 @@ export default function PortalBidHistoryPage() {
                         : String(bid.lead_time)}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
-                      {formatDate(bid.submitted_at)}
+                      {formatDateTimeKR(bid.submitted_at)}
                     </TableCell>
                     <TableCell>
                       <Badge variant={BID_STATUS_VARIANT[status] ?? 'outline'}>

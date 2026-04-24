@@ -9,6 +9,7 @@ import PageHeader from '@/components/common/PageHeader'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { api } from '@/lib/api'
+import { formatDateTimeKR, formatDeadlineRelative } from '@/lib/datetime'
 import type { EntryRow } from '@/lib/types'
 
 // RFQ lifecycle phases that are actionable from the supplier's perspective.
@@ -31,18 +32,6 @@ const STATUS_VARIANT: Record<VisibleStatus, 'default' | 'secondary' | 'outline'>
   awarded: 'outline',
 }
 
-function formatDate(iso: unknown): string {
-  if (typeof iso !== 'string' || !iso) return '-'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '-'
-  return d.toLocaleString('ko-KR', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
 
 export default function PortalRfqListPage() {
   // Supplier sees RFQs that are live or recently concluded. We skip drafts
@@ -122,22 +111,27 @@ export default function PortalRfqListPage() {
                       </div>
                       <div>
                         <dt className="text-muted-foreground/70">입찰마감</dt>
-                        <dd className="text-foreground">{formatDate(rfq.deadline_at)}</dd>
+                        <dd className="text-foreground">{formatDateTimeKR(rfq.deadline_at)}</dd>
                       </div>
                       <div>
                         <dt className="text-muted-foreground/70">개찰일시</dt>
-                        <dd className="text-foreground">{formatDate(rfq.open_at)}</dd>
+                        <dd className="text-foreground">{formatDateTimeKR(rfq.open_at)}</dd>
                       </div>
                     </dl>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-2">
                     {submittable ? (
-                      <Link
-                        to={`/portal/rfqs/${String(rfq.id)}/bid`}
-                        className="inline-flex items-center rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-white hover:bg-foreground/90"
-                      >
-                        입찰서 제출
-                      </Link>
+                      <>
+                        <Link
+                          to={`/portal/rfqs/${String(rfq.id)}/bid`}
+                          className="inline-flex items-center rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-white hover:bg-foreground/90"
+                        >
+                          입찰서 제출
+                        </Link>
+                        <span className="text-[11px] text-muted-foreground">
+                          {formatDeadlineRelative(rfq.deadline_at)}
+                        </span>
+                      </>
                     ) : (
                       <span className="text-xs text-muted-foreground">마감됨</span>
                     )}
