@@ -31,6 +31,12 @@ export default function RootLayout() {
     if (isError) navigate('/login', { replace: true })
   }, [isError, navigate])
 
+  // Suppliers belong on the external portal, not inside the internal SPA.
+  // Direct /apps/... URLs would otherwise bypass the post-login redirect.
+  useEffect(() => {
+    if (user?.role === 'supplier') navigate('/portal', { replace: true })
+  }, [user?.role, navigate])
+
   // Scroll to top only when the base path changes (not on query/hash changes).
   const prevPathRef = useRef(pathname)
   useEffect(() => {

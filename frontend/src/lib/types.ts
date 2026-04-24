@@ -305,15 +305,19 @@ export interface Collection {
  * - `pm`       — project manager: create/edit collections, manage members.
  * - `engineer` — standard user: CRUD entries per collection access_config.
  * - `viewer`   — read-only access to permitted collections.
+ * - `supplier` — external bidder; restricted to /portal/* and row-filtered
+ *                to their own bids via `supplier_id`.
  */
 export interface User {
   id: string
   email: string
   name: string
-  role: 'director' | 'pm' | 'engineer' | 'viewer'
+  role: 'director' | 'pm' | 'engineer' | 'viewer' | 'supplier'
   is_active: boolean
   department_id?: string | null
   subsidiary_id?: string | null
+  /** Present only for role='supplier'. Points at data.suppliers.id. */
+  supplier_id?: string | null
   position: string
   title: string
   phone: string

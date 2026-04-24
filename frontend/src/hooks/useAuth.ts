@@ -42,6 +42,9 @@ export function useCurrentUser() {
  * Login mutation. On success, seeds the React Query cache with the returned
  * user via `setQueryData` so the app can render immediately without an
  * extra GET /api/auth/me round-trip.
+ *
+ * Role-based landing: supplier users route to `/portal` (external bid
+ * submission UI); everyone else to `/` (internal SPA).
  */
 export function useLogin() {
   const queryClient = useQueryClient()
@@ -53,14 +56,17 @@ export function useLogin() {
       // Seed the /me cache with the user we just got back so the layout
       // doesn't have to refetch.
       queryClient.setQueryData(queryKeys.auth.me(), data.user)
-      navigate('/', { replace: true })
+      const target = data.user.role === 'supplier' ? '/portal' : '/'
+      navigate(target, { replace: true })
     },
   })
 }
 
 /**
  * Logout mutation. Clears all auth-related query cache via `removeQueries`
- * and redirects to /login.
+ * and redirects to the appropriate login page — /portal/login for supplier
+ * sessions (detected by URL prefix so we don't depend on the now-cleared
+ * user cache), /login otherwise.
  */
 export function useLogout() {
   const queryClient = useQueryClient()
@@ -70,7 +76,8 @@ export function useLogout() {
     mutationFn: () => api.post<void>('/auth/logout'),
     onSuccess: () => {
       queryClient.removeQueries({ queryKey: queryKeys.auth.all })
-      navigate('/login', { replace: true })
+      const target = window.location.pathname.startsWith('/portal') ? '/portal/login' : '/login'
+      navigate(target, { replace: true })
     },
   })
 }
