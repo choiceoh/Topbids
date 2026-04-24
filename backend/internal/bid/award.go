@@ -42,6 +42,12 @@ var (
 
 // AwardResult describes the outcome of an award computation.
 // When distributePO chains successfully, Distribution is populated.
+//
+// Idempotent=true signals the RFQ was already awarded before this call —
+// no scores were recomputed and no audit row was written; the handler
+// should treat it as a 200 reply with the stored winner info. This lets
+// the UI safely retry (network blip, double-click) without triggering a
+// 400 or creating duplicate PO rows.
 type AwardResult struct {
 	RFQID        string            `json:"rfq_id"`
 	EvalMethod   string            `json:"eval_method"`
@@ -50,6 +56,7 @@ type AwardResult struct {
 	TotalBids    int               `json:"total_bids"`
 	RejectedBids []string          `json:"rejected_bids"`
 	Distribution *DistributeResult `json:"distribution,omitempty"`
+	Idempotent   bool              `json:"idempotent,omitempty"`
 }
 
 // bidRow is the minimal shape we load for scoring.
@@ -99,6 +106,12 @@ func AwardRFQ(ctx context.Context, pool *pgxpool.Pool, rfqID string, actor Actor
 			return nil, ErrRFQNotFound
 		}
 		return nil, fmt.Errorf("load rfq: %w", err)
+	}
+	// Already awarded → return the prior result idempotently. Double-submits
+	// from the UI are common (network retries, impatient clicks) and must
+	// not create duplicate audit rows or re-run PO distribution.
+	if rfqStatus == RFQStatusAwarded {
+		return loadExistingAward(ctx, pool, rfqID, evalMethod)
 	}
 	if rfqStatus != RFQStatusOpened && rfqStatus != RFQStatusEvaluating {
 		return nil, fmt.Errorf("%w: status=%q (must be opened or evaluating)", ErrRFQIneligible, rfqStatus)
@@ -210,6 +223,66 @@ func AwardRFQ(ctx context.Context, pool *pgxpool.Pool, rfqID string, actor Actor
 	}
 
 	return result, nil
+}
+
+// loadExistingAward rebuilds an AwardResult from the durable state of an
+// already-awarded RFQ. Used for the idempotent path of AwardRFQ so a second
+// identical call returns the same shape as the first without touching the DB.
+//
+// Returns a result with Idempotent=true and Distribution=nil (callers that
+// need distribution info can hit the purchase_orders collection directly —
+// the award itself is durable and distribution is derivable).
+func loadExistingAward(ctx context.Context, pool *pgxpool.Pool, rfqID, evalMethod string) (*AwardResult, error) {
+	// Locate the single winner. There must be exactly one — if the data is
+	// corrupted (0 or >1 awarded bids), we surface that as an error rather
+	// than silently picking one.
+	var winnerID string
+	var winnerAmount float64
+	err := pool.QueryRow(ctx, `
+		SELECT id, total_amount
+		  FROM data.bids
+		 WHERE rfq = $1 AND status = $2 AND deleted_at IS NULL`,
+		rfqID, BidStatusAwarded,
+	).Scan(&winnerID, &winnerAmount)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("%w: rfq marked awarded but no winning bid row", ErrRFQIneligible)
+		}
+		return nil, fmt.Errorf("load existing winner: %w", err)
+	}
+
+	// Bucket the rejected bids for the response summary.
+	rows, err := pool.Query(ctx, `
+		SELECT id
+		  FROM data.bids
+		 WHERE rfq = $1 AND status = $2 AND deleted_at IS NULL`,
+		rfqID, BidStatusRejected,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("load rejected: %w", err)
+	}
+	defer rows.Close()
+	var rejected []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		rejected = append(rejected, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return &AwardResult{
+		RFQID:        rfqID,
+		EvalMethod:   evalMethod,
+		WinnerBidID:  winnerID,
+		WinnerAmount: winnerAmount,
+		TotalBids:    1 + len(rejected),
+		RejectedBids: rejected,
+		Idempotent:   true,
+	}, nil
 }
 
 // loadEligibleBids fetches bids that are still in play for the given RFQ.

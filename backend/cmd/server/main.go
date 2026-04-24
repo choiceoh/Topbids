@@ -528,6 +528,8 @@ func buildRouter(cfg routerConfig) *chi.Mux {
 		r.Route("/api/bid", func(b chi.Router) {
 			b.Use(middleware.RequireRole("director", "pm"))
 			b.Post("/rfqs/{rfqId}/award", cfg.bidH.Award)
+			// Audit log viewer — handler further restricts to director.
+			b.Get("/audit", cfg.bidH.AuditLog)
 		})
 
 		// Notifications
