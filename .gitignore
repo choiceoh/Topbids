@@ -21,3 +21,6 @@ backend/cmd/server/static/assets/
 *.swp
 node_modules/
 .claude/worktrees
+
+# Local-only deploy override (cloudflared sidecar etc.)
+docker-compose.override.yml
