@@ -9,7 +9,7 @@
 #   DROPBOX_APP_SECRET    Dropbox 앱 시크릿
 #
 # 선택 환경변수:
-#   DROPBOX_BACKUP_PATH   Dropbox 내 백업 폴더 (기본: /phaeton-backups)
+#   DROPBOX_BACKUP_PATH   Dropbox 내 백업 폴더 (기본: /topbid-backups)
 #   BACKUP_RETAIN_DAYS    보관 일수 (기본: 30)
 #
 set -euo pipefail
@@ -19,12 +19,12 @@ DATABASE_URL="${DATABASE_URL:?DATABASE_URL is required}"
 DROPBOX_REFRESH_TOKEN="${DROPBOX_REFRESH_TOKEN:?DROPBOX_REFRESH_TOKEN is required}"
 DROPBOX_APP_KEY="${DROPBOX_APP_KEY:?DROPBOX_APP_KEY is required}"
 DROPBOX_APP_SECRET="${DROPBOX_APP_SECRET:?DROPBOX_APP_SECRET is required}"
-DROPBOX_BACKUP_PATH="${DROPBOX_BACKUP_PATH:-/phaeton-backups}"
+DROPBOX_BACKUP_PATH="${DROPBOX_BACKUP_PATH:-/topbid-backups}"
 BACKUP_RETAIN_DAYS="${BACKUP_RETAIN_DAYS:-30}"
 
 TIMESTAMP="$(date -u +%Y%m%d-%H%M%S)"
-FILENAME="phaeton-${TIMESTAMP}.sql.gz"
-TMPFILE="$(mktemp /tmp/phaeton-backup-XXXXXX.sql.gz)"
+FILENAME="topbid-${TIMESTAMP}.sql.gz"
+TMPFILE="$(mktemp /tmp/topbid-backup-XXXXXX.sql.gz)"
 
 cleanup() { rm -f "$TMPFILE"; }
 trap cleanup EXIT
@@ -127,7 +127,7 @@ CUTOFF_DATE=$(date -u -d "-${BACKUP_RETAIN_DAYS} days" +%Y%m%d 2>/dev/null || \
   date -u -v-${BACKUP_RETAIN_DAYS}d +%Y%m%d)
 
 DELETED=0
-for entry in $(echo "$LIST_RESPONSE" | grep -o '"name"[[:space:]]*:[[:space:]]*"phaeton-[0-9]*-[0-9]*.sql.gz"' | cut -d'"' -f4); do
+for entry in $(echo "$LIST_RESPONSE" | grep -o '"name"[[:space:]]*:[[:space:]]*"topbid-[0-9]*-[0-9]*.sql.gz"' | cut -d'"' -f4); do
   FILE_DATE=$(echo "$entry" | grep -o '[0-9]\{8\}')
   if [ -n "$FILE_DATE" ] && [ "$FILE_DATE" -lt "$CUTOFF_DATE" ]; then
     curl -sS -X POST "https://api.dropboxapi.com/2/files/delete_v2" \

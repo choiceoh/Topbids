@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/choiceoh/phaeton/backend/internal/config"
+	"github.com/choiceoh/topbid/backend/internal/config"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 

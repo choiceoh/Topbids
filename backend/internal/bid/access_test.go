@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/choiceoh/phaeton/backend/internal/schema"
+	"github.com/choiceoh/topbid/backend/internal/schema"
 )
 
 // --- Fixtures ---

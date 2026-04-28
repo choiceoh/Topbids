@@ -2,8 +2,8 @@
 //
 // Two modes are available:
 //
-//	SetupDB(t)     — connects to phaeton_test, bootstraps schemas, truncates between tests.
-//	                  Requires a local phaeton_test database.
+//	SetupDB(t)     — connects to topbid_test, bootstraps schemas, truncates between tests.
+//	                  Requires a local topbid_test database.
 //	NewTestPool(t) — connects to TEST_DATABASE_URL, creates an isolated schema per test.
 //	                  Skipped if TEST_DATABASE_URL is not set.
 package testutil
@@ -18,10 +18,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/choiceoh/phaeton/backend/internal/db"
+	"github.com/choiceoh/topbid/backend/internal/db"
 )
 
-const defaultTestDSN = "postgres://phaeton:phaeton@localhost:5432/phaeton_test?sslmode=disable"
+const defaultTestDSN = "postgres://topbid:topbid@localhost:5432/topbid_test?sslmode=disable"
 
 // bootstrapOnce ensures bootstrap runs only once per test process.
 var bootstrapOnce sync.Once

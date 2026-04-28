@@ -1,5 +1,5 @@
 // Package amaranth implements a sync.Source that pulls organization and
-// user data from the Amaranth10 HR system into Phaeton's auth tables.
+// user data from the Amaranth10 HR system into Topbid's auth tables.
 //
 // Configuration is via environment variables:
 //
@@ -18,7 +18,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/choiceoh/phaeton/backend/internal/sync"
+	"github.com/choiceoh/topbid/backend/internal/sync"
 )
 
 // Config holds Amaranth connection settings loaded from environment.

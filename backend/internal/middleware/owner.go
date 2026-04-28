@@ -5,8 +5,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/choiceoh/phaeton/backend/internal/infra/apierr"
-	"github.com/choiceoh/phaeton/backend/internal/schema"
+	"github.com/choiceoh/topbid/backend/internal/infra/apierr"
+	"github.com/choiceoh/topbid/backend/internal/schema"
 )
 
 // RequireCollectionOwnerOrRole allows access if the user has one of the given

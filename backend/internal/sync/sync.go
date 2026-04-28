@@ -1,4 +1,4 @@
-// Package sync defines the interface for external API → Phaeton DB
+// Package sync defines the interface for external API → Topbid DB
 // synchronization batch jobs.
 //
 // Actual API calls are deferred until external API specs are received.
@@ -18,7 +18,7 @@ type Source interface {
 	Name() string
 
 	// Sync performs a single synchronization cycle.
-	// It should fetch data from the external system and upsert into Phaeton.
+	// It should fetch data from the external system and upsert into Topbid.
 	// The context carries a deadline; implementations must respect cancellation.
 	Sync(ctx context.Context) (*Result, error)
 }

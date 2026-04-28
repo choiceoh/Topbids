@@ -18,8 +18,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/choiceoh/phaeton/backend/internal/infra/apierr"
-	"github.com/choiceoh/phaeton/backend/internal/middleware"
+	"github.com/choiceoh/topbid/backend/internal/infra/apierr"
+	"github.com/choiceoh/topbid/backend/internal/middleware"
 )
 
 // User represents an auth.users row.

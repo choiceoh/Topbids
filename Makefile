@@ -19,7 +19,7 @@ build-ui:
 	cd frontend && npm run build
 
 build-api:
-	cd backend && go build -o ../bin/phaeton ./cmd/server
+	cd backend && go build -o ../bin/topbid ./cmd/server
 
 # 정리
 clean:

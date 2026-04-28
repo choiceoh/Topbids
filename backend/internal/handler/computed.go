@@ -10,8 +10,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/choiceoh/phaeton/backend/internal/pgutil"
-	"github.com/choiceoh/phaeton/backend/internal/schema"
+	"github.com/choiceoh/topbid/backend/internal/pgutil"
+	"github.com/choiceoh/topbid/backend/internal/schema"
 )
 
 // computedOpts extracts common options from a computed field.

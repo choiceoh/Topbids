@@ -1,7 +1,7 @@
 package seed
 
 import (
-	"github.com/choiceoh/phaeton/backend/internal/schema"
+	"github.com/choiceoh/topbid/backend/internal/schema"
 )
 
 // BidPresets returns the fixed Topbids domain collections (입찰 공고 / 입찰서 / 공급사).

@@ -1,15 +1,15 @@
-# CLAUDE.md — Topworks (내부 코드명: Phaeton)
+# CLAUDE.md — Topworks (내부 코드명: Topbid)
 
 ## 프로젝트
 
 노코드 업무앱 플랫폼 **Topworks**. 사용자가 코드 없이 앱(폼+데이터+뷰)을 만들고 ERP 기능을 직접 구성.
-외부 정식 이름은 **Topworks**, 내부 개발명/코드명은 **Phaeton**. 폴더명·모듈 경로·DB 자격증명·도커 볼륨·localStorage 키 등 내부 식별자는 `phaeton`을 그대로 사용. 엔드유저에게 보이는 UI 텍스트·이메일 제목·AI 프롬프트·User-Agent 등은 모두 **Topworks**로 표기.
+외부 정식 이름은 **Topworks**, 내부 개발명/코드명은 **Topbid**. 폴더명·모듈 경로·DB 자격증명·도커 볼륨·localStorage 키 등 내부 식별자는 `topbid`을 그대로 사용. 엔드유저에게 보이는 UI 텍스트·이메일 제목·AI 프롬프트·User-Agent 등은 모두 **Topworks**로 표기.
 각 앱 = 진짜 PostgreSQL 테이블 (동적 DDL). Go 백엔드 + Vite React SPA.
 사용자 300명, DGX Spark 구동.
 
 ## 필독 문서
 
-- `docs/08-PHAETON-V2-DESIGN.md` — 전체 설계, 아키텍처, 데이터 모델
+- `docs/08-TOPBID-V2-DESIGN.md` — 전체 설계, 아키텍처, 데이터 모델
 - `docs/09-DATA-ENGINE-GUIDE.md` — Data Engine CRUD/쿼리 구현 가이드
 
 ### 참고 문서
@@ -165,7 +165,7 @@ make build       # 프론트 빌드 → Go 서버 static/에 출력
 
 ## 서버 배포 (Docker)
 
-DB와 앱 서버 모두 Docker Compose로 운영. DB 볼륨은 `phaeton_pgdata` (외부 볼륨)에 데이터가 있으므로 **절대 삭제하지 말 것**.
+DB와 앱 서버 모두 Docker Compose로 운영. DB 볼륨은 `topbid_pgdata` (외부 볼륨)에 데이터가 있으므로 **절대 삭제하지 말 것**.
 
 ```bash
 # 앱만 최신 코드로 재배포 (DB 유지, app만 리빌드)
@@ -181,7 +181,7 @@ docker compose logs -f app
 
 **주의사항:**
 - `docker compose down -v` 금지 — 볼륨이 삭제되어 DB 데이터 유실
-- DB 컨테이너를 새로 만들 때 기존 볼륨(`phaeton_pgdata`)을 연결해야 인증이 통과됨
+- DB 컨테이너를 새로 만들 때 기존 볼륨(`topbid_pgdata`)을 연결해야 인증이 통과됨
 - app 컨테이너만 교체할 때는 `docker compose up --build -d app` (DB 무중단)
 
 ## 커밋 메시지

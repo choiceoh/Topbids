@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/choiceoh/phaeton/backend/internal/ai"
+	"github.com/choiceoh/topbid/backend/internal/ai"
 )
 
 // workspaceTools returns the tool definitions available for AI chat and automation.

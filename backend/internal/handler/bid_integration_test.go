@@ -11,13 +11,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/choiceoh/phaeton/backend/internal/events"
-	"github.com/choiceoh/phaeton/backend/internal/handler"
-	"github.com/choiceoh/phaeton/backend/internal/middleware"
-	"github.com/choiceoh/phaeton/backend/internal/migration"
-	"github.com/choiceoh/phaeton/backend/internal/schema"
-	"github.com/choiceoh/phaeton/backend/internal/seed"
-	"github.com/choiceoh/phaeton/backend/internal/testutil"
+	"github.com/choiceoh/topbid/backend/internal/events"
+	"github.com/choiceoh/topbid/backend/internal/handler"
+	"github.com/choiceoh/topbid/backend/internal/middleware"
+	"github.com/choiceoh/topbid/backend/internal/migration"
+	"github.com/choiceoh/topbid/backend/internal/schema"
+	"github.com/choiceoh/topbid/backend/internal/seed"
+	"github.com/choiceoh/topbid/backend/internal/testutil"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 

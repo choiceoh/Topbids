@@ -41,7 +41,7 @@ const passwordSchema = z
 type ProfileForm = z.infer<typeof profileSchema>
 type PasswordForm = z.infer<typeof passwordSchema>
 
-const NOTIF_PREFS_KEY = 'phaeton_notification_prefs'
+const NOTIF_PREFS_KEY = 'topbid_notification_prefs'
 
 function loadNotifPrefs() {
   try {

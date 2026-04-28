@@ -5,8 +5,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/choiceoh/phaeton/backend/internal/ai"
-	"github.com/choiceoh/phaeton/backend/internal/schema"
+	"github.com/choiceoh/topbid/backend/internal/ai"
+	"github.com/choiceoh/topbid/backend/internal/schema"
 )
 
 // AIHandler serves AI-powered endpoints.

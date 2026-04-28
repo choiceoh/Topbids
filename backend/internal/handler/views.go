@@ -6,7 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/choiceoh/phaeton/backend/internal/schema"
+	"github.com/choiceoh/topbid/backend/internal/schema"
 )
 
 // ViewHandler serves the View API (/api/schema/collections/{id}/views/...).

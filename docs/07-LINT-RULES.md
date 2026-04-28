@@ -1,6 +1,6 @@
 # 07. 린트 및 코드 스타일 규칙
 
-Phaeton 프로젝트 코드 포매팅, 네이밍, 린트 규칙 정의.
+Topbid 프로젝트 코드 포매팅, 네이밍, 린트 규칙 정의.
 설정 파일: `eslint.config.mjs`, `.prettierrc`
 
 ---
@@ -30,7 +30,7 @@ Prettier로 자동 적용. `.prettierrc` 설정 기준.
 | 컴포넌트 파일   | PascalCase | `ProjectCard.tsx`                        |
 | 유틸/훅 파일    | camelCase  | `copyMilestones.ts`, `useProjectData.ts` |
 | Collection slug | kebab-case | `project-milestones`                     |
-| API 라우트      | kebab-case | `/api/phaeton/staff-load`                |
+| API 라우트      | kebab-case | `/api/topbid/staff-load`                |
 
 ---
 

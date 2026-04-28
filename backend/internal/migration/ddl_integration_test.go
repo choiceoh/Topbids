@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/choiceoh/phaeton/backend/internal/schema"
+	"github.com/choiceoh/topbid/backend/internal/schema"
 )
 
 func TestGenerateCreateTable_Basic(t *testing.T) {

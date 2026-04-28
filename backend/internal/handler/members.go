@@ -8,9 +8,9 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/choiceoh/phaeton/backend/internal/infra/apierr"
-	"github.com/choiceoh/phaeton/backend/internal/middleware"
-	"github.com/choiceoh/phaeton/backend/internal/pgutil"
+	"github.com/choiceoh/topbid/backend/internal/infra/apierr"
+	"github.com/choiceoh/topbid/backend/internal/middleware"
+	"github.com/choiceoh/topbid/backend/internal/pgutil"
 )
 
 // CollectionMember represents a user's role within a collection.

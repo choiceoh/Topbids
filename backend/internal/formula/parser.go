@@ -18,7 +18,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/choiceoh/phaeton/backend/internal/pgutil"
+	"github.com/choiceoh/topbid/backend/internal/pgutil"
 )
 
 // tokenType classifies lexer tokens.

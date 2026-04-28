@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/choiceoh/phaeton/backend/internal/schema"
+	"github.com/choiceoh/topbid/backend/internal/schema"
 )
 
 // resolveAutoExpand replaces the special "auto" value with all relation field slugs.

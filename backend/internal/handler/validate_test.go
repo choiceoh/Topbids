@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/choiceoh/phaeton/backend/internal/schema"
+	"github.com/choiceoh/topbid/backend/internal/schema"
 )
 
 func TestValidateFieldValueText(t *testing.T) {

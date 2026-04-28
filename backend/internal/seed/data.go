@@ -7,13 +7,13 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/choiceoh/phaeton/backend/internal/schema"
+	"github.com/choiceoh/topbid/backend/internal/schema"
 )
 
 // SeedData inserts sample records into the bid domain collections.
 // Idempotent: skips if records already exist.
 //
-// The Topbids refactor dropped the Phaeton no-code sample views, automations,
+// The Topbids refactor dropped the Topbid no-code sample views, automations,
 // and charts. Only minimal domain-demonstration rows remain.
 func SeedData(ctx context.Context, pool *pgxpool.Pool, store *schema.Store, cache *schema.Cache) error {
 	// Get admin user ID (best-effort — seed data is optional).

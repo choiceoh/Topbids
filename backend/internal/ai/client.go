@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/choiceoh/phaeton/backend/internal/config"
+	"github.com/choiceoh/topbid/backend/internal/config"
 )
 
 // Client talks to a local vLLM (OpenAI-compatible) server.

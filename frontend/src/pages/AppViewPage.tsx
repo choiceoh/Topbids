@@ -309,7 +309,7 @@ export default function AppViewPage() {
   )
 
   // Per-column aggregate function state (default: sum).
-  const aggFnStorageKey = appId ? `phaeton:aggfn:${appId}` : null
+  const aggFnStorageKey = appId ? `topbid:aggfn:${appId}` : null
   const [columnAggFn, setColumnAggFn] = useState<Record<string, string>>(() => {
     if (aggFnStorageKey) {
       try {
@@ -469,7 +469,7 @@ export default function AppViewPage() {
   }, [collection, process, processVisible, searchText])
 
   // Default: hide columns beyond the first 8 data fields, restored from localStorage if available.
-  const colVisStorageKey = appId ? `phaeton:colvis:${appId}` : null
+  const colVisStorageKey = appId ? `topbid:colvis:${appId}` : null
   const initialColumnVisibility = useMemo<Record<string, boolean>>(() => {
     if (colVisStorageKey) {
       try {
@@ -498,7 +498,7 @@ export default function AppViewPage() {
   )
 
   // Column pinning persistence (same pattern as visibility).
-  const colPinStorageKey = appId ? `phaeton:colpin:${appId}` : null
+  const colPinStorageKey = appId ? `topbid:colpin:${appId}` : null
   const initialColumnPinning = useMemo(() => {
     if (colPinStorageKey) {
       try {

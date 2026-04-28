@@ -3,7 +3,7 @@ package handler
 // chatGuide is a comprehensive user guide embedded into the AI chat system prompt.
 // It is maintained as a Go string constant so that the single binary includes it.
 const chatGuide = `
-## Phaeton 사용 가이드
+## Topbid 사용 가이드
 
 ### 앱 만들기
 1. 상단 메뉴에서 "앱" 클릭

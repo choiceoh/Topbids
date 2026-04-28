@@ -3,7 +3,7 @@ package middleware
 import (
 	"net/http"
 
-	"github.com/choiceoh/phaeton/backend/internal/infra/apierr"
+	"github.com/choiceoh/topbid/backend/internal/infra/apierr"
 )
 
 // RequireRole returns middleware that restricts access to users with the given roles.

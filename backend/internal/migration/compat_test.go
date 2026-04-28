@@ -3,7 +3,7 @@ package migration
 import (
 	"testing"
 
-	"github.com/choiceoh/phaeton/backend/internal/schema"
+	"github.com/choiceoh/topbid/backend/internal/schema"
 )
 
 func TestCheckCompat(t *testing.T) {

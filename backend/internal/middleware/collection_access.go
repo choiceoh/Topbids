@@ -7,7 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/choiceoh/phaeton/backend/internal/infra/apierr"
+	"github.com/choiceoh/topbid/backend/internal/infra/apierr"
 )
 
 // CollectionAccess checks that the authenticated user has access to the collection

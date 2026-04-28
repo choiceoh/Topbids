@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/choiceoh/phaeton/backend/internal/migration"
-	"github.com/choiceoh/phaeton/backend/internal/schema"
-	"github.com/choiceoh/phaeton/backend/internal/testutil"
+	"github.com/choiceoh/topbid/backend/internal/migration"
+	"github.com/choiceoh/topbid/backend/internal/schema"
+	"github.com/choiceoh/topbid/backend/internal/testutil"
 )
 
 func TestEngine_CreateAndDropCollection(t *testing.T) {

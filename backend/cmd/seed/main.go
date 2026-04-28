@@ -8,12 +8,12 @@ import (
 	"log"
 	"os"
 
-	"github.com/choiceoh/phaeton/backend/internal/config"
-	"github.com/choiceoh/phaeton/backend/internal/db"
-	"github.com/choiceoh/phaeton/backend/internal/handler"
-	"github.com/choiceoh/phaeton/backend/internal/migration"
-	"github.com/choiceoh/phaeton/backend/internal/schema"
-	"github.com/choiceoh/phaeton/backend/internal/seed"
+	"github.com/choiceoh/topbid/backend/internal/config"
+	"github.com/choiceoh/topbid/backend/internal/db"
+	"github.com/choiceoh/topbid/backend/internal/handler"
+	"github.com/choiceoh/topbid/backend/internal/migration"
+	"github.com/choiceoh/topbid/backend/internal/schema"
+	"github.com/choiceoh/topbid/backend/internal/seed"
 )
 
 func main() {

@@ -12,9 +12,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/choiceoh/phaeton/backend/internal/middleware"
-	"github.com/choiceoh/phaeton/backend/internal/pgutil"
-	"github.com/choiceoh/phaeton/backend/internal/schema"
+	"github.com/choiceoh/topbid/backend/internal/middleware"
+	"github.com/choiceoh/topbid/backend/internal/pgutil"
+	"github.com/choiceoh/topbid/backend/internal/schema"
 )
 
 // ---------------------------------------------------------------------------
