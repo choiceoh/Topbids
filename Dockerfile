@@ -21,22 +21,22 @@ COPY backend/ ./
 # Copy Vite build output into embed path
 COPY --from=frontend /src/backend/cmd/server/static ./cmd/server/static
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o /phaeton ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux go build -o /topbid ./cmd/server
 
 # ── Stage 3: Minimal runtime ────────────────────────────────
 FROM alpine:3.20
 
 RUN apk add --no-cache ca-certificates tzdata chromium \
     && echo 'hosts: files dns' > /etc/nsswitch.conf
-RUN adduser -D -h /app phaeton
+RUN adduser -D -h /app topbid
 
 WORKDIR /app
-COPY --from=backend /phaeton ./phaeton
+COPY --from=backend /topbid ./topbid
 
 ENV CHROME_PATH=/usr/bin/chromium-browser
 
-USER phaeton
+USER topbid
 
-EXPOSE 8080
+EXPOSE 8081
 
-ENTRYPOINT ["./phaeton"]
+ENTRYPOINT ["./topbid"]
