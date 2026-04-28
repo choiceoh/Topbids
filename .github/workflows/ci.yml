@@ -51,13 +51,13 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: topbid
-          POSTGRES_PASSWORD: topbid
-          POSTGRES_DB: topbid_test
+          POSTGRES_USER: phaeton
+          POSTGRES_PASSWORD: phaeton
+          POSTGRES_DB: phaeton_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U topbid"
+          --health-cmd "pg_isready -U phaeton"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -76,8 +76,8 @@ jobs:
 
       - name: Go tests (integration)
         env:
-          DATABASE_URL: postgres://topbid:topbid@localhost:5432/topbid_test?sslmode=disable
-          TEST_DATABASE_URL: postgres://topbid:topbid@localhost:5432/topbid_test?sslmode=disable
+          DATABASE_URL: postgres://phaeton:phaeton@localhost:5432/phaeton_test?sslmode=disable
+          TEST_DATABASE_URL: postgres://phaeton:phaeton@localhost:5432/phaeton_test?sslmode=disable
         run: cd backend && go test -count=1 ./...
 
   lint-and-test-ui:
