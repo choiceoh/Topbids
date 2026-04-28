@@ -10,10 +10,10 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/choiceoh/phaeton/backend/internal/events"
-	"github.com/choiceoh/phaeton/backend/internal/middleware"
-	"github.com/choiceoh/phaeton/backend/internal/pgutil"
-	"github.com/choiceoh/phaeton/backend/internal/schema"
+	"github.com/choiceoh/topbid/backend/internal/events"
+	"github.com/choiceoh/topbid/backend/internal/middleware"
+	"github.com/choiceoh/topbid/backend/internal/pgutil"
+	"github.com/choiceoh/topbid/backend/internal/schema"
 )
 
 // Comment represents a user comment on a data record.

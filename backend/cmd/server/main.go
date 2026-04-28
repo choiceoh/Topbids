@@ -16,23 +16,23 @@ import (
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/choiceoh/phaeton/backend/internal/ai"
-	"github.com/choiceoh/phaeton/backend/internal/bid"
-	"github.com/choiceoh/phaeton/backend/internal/config"
-	"github.com/choiceoh/phaeton/backend/internal/db"
-	"github.com/choiceoh/phaeton/backend/internal/events"
-	"github.com/choiceoh/phaeton/backend/internal/handler"
-	"github.com/choiceoh/phaeton/backend/internal/infra/lifecycle"
-	"github.com/choiceoh/phaeton/backend/internal/infra/logging"
-	"github.com/choiceoh/phaeton/backend/internal/infra/metrics"
-	"github.com/choiceoh/phaeton/backend/internal/infra/workerpool"
-	"github.com/choiceoh/phaeton/backend/internal/middleware"
-	"github.com/choiceoh/phaeton/backend/internal/migration"
-	"github.com/choiceoh/phaeton/backend/internal/notify"
-	"github.com/choiceoh/phaeton/backend/internal/samlsp"
-	"github.com/choiceoh/phaeton/backend/internal/schema"
-	"github.com/choiceoh/phaeton/backend/internal/sync"
-	"github.com/choiceoh/phaeton/backend/internal/sync/amaranth"
+	"github.com/choiceoh/topbid/backend/internal/ai"
+	"github.com/choiceoh/topbid/backend/internal/bid"
+	"github.com/choiceoh/topbid/backend/internal/config"
+	"github.com/choiceoh/topbid/backend/internal/db"
+	"github.com/choiceoh/topbid/backend/internal/events"
+	"github.com/choiceoh/topbid/backend/internal/handler"
+	"github.com/choiceoh/topbid/backend/internal/infra/lifecycle"
+	"github.com/choiceoh/topbid/backend/internal/infra/logging"
+	"github.com/choiceoh/topbid/backend/internal/infra/metrics"
+	"github.com/choiceoh/topbid/backend/internal/infra/workerpool"
+	"github.com/choiceoh/topbid/backend/internal/middleware"
+	"github.com/choiceoh/topbid/backend/internal/migration"
+	"github.com/choiceoh/topbid/backend/internal/notify"
+	"github.com/choiceoh/topbid/backend/internal/samlsp"
+	"github.com/choiceoh/topbid/backend/internal/schema"
+	"github.com/choiceoh/topbid/backend/internal/sync"
+	"github.com/choiceoh/topbid/backend/internal/sync/amaranth"
 )
 
 //go:embed static/*
@@ -592,7 +592,7 @@ func serveSPA(r *chi.Mux) {
 	indexHTML, err := fs.ReadFile(sub, "index.html")
 	if err != nil {
 		slog.Warn("index.html not found in embedded static", "error", err)
-		indexHTML = []byte("<!DOCTYPE html><html><body>phaeton</body></html>")
+		indexHTML = []byte("<!DOCTYPE html><html><body>topbid</body></html>")
 	}
 
 	r.Get("/*", func(w http.ResponseWriter, req *http.Request) {

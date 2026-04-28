@@ -13,7 +13,7 @@ type Message struct {
 	Title string `json:"title,omitempty"`
 	// Body is the main message content (required).
 	Body string `json:"body"`
-	// URL is an optional deep-link into the Phaeton UI.
+	// URL is an optional deep-link into the Topbid UI.
 	URL string `json:"url,omitempty"`
 	// Metadata holds channel-specific extra data (e.g. button configs).
 	Metadata map[string]any `json:"metadata,omitempty"`
@@ -25,7 +25,7 @@ type Notifier interface {
 	Name() string
 
 	// Send delivers a message to the specified user.
-	// userID is the Phaeton user UUID; the adapter resolves the external
+	// userID is the Topbid user UUID; the adapter resolves the external
 	// address (email, Slack member ID, etc.) internally.
 	Send(ctx context.Context, userID string, msg Message) error
 

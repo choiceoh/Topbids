@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/choiceoh/phaeton/backend/internal/schema"
-	"github.com/choiceoh/phaeton/backend/internal/testutil"
+	"github.com/choiceoh/topbid/backend/internal/schema"
+	"github.com/choiceoh/topbid/backend/internal/testutil"
 )
 
 func TestStore_CollectionCRUD(t *testing.T) {

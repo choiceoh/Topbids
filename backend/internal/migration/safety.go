@@ -1,7 +1,7 @@
 package migration
 
 import (
-	"github.com/choiceoh/phaeton/backend/internal/schema"
+	"github.com/choiceoh/topbid/backend/internal/schema"
 )
 
 // ClassifyAddField determines the safety level for adding a new field.

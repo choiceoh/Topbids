@@ -19,7 +19,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/choiceoh/phaeton/backend/internal/pgutil"
+	"github.com/choiceoh/topbid/backend/internal/pgutil"
 )
 
 // FieldType enumerates the supported column types.

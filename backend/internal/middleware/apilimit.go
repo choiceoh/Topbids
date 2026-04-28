@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/choiceoh/phaeton/backend/internal/infra/apierr"
+	"github.com/choiceoh/topbid/backend/internal/infra/apierr"
 )
 
 // APILimiter is a per-user token-bucket rate limiter for API requests.

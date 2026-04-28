@@ -1,4 +1,4 @@
-# Topworks (Phaeton) — 구현 기능 목록
+# Topworks (Topbid) — 구현 기능 목록
 
 > 최종 갱신: 2026-04-11
 

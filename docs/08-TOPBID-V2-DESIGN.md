@@ -1,8 +1,8 @@
-# Phaeton v2 — 노코드 업무앱 플랫폼
+# Topbid v2 — 노코드 업무앱 플랫폼
 
 ## Context
 
-기존 Payload CMS 기반 Phaeton을 폐기하고,
+기존 Payload CMS 기반 Topbid을 폐기하고,
 노코드 업무앱 빌더를 핵심으로 하는 플랫폼을 처음부터 만든다.
 
 핵심 원칙: **"앱을 만드는 것이 곧 ERP를 만드는 것"**
@@ -99,7 +99,7 @@ Next.js 제거로 Node.js 프로덕션 서버 불필요 → 배포 단순화.
 ## 프로젝�� 구조 (모노레포)
 
 ```
-phaeton/
+topbid/
   backend/
     cmd/server/main.go              진입점 + SPA 서빙
     cmd/seed/main.go                시드 스크립트
@@ -610,7 +610,7 @@ works_fields → shadcn 컴포넌트 매핑:
 
 ## 기존 ERP → 프리셋 앱
 
-기존 Phaeton의 ERP 기능을 시드 데이터로 제공:
+기존 Topbid의 ERP 기능을 시드 데이터로 제공:
 
 | 기존 | 프리셋 앱 | 필드 |
 |------|----------|------|

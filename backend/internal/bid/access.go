@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/choiceoh/phaeton/backend/internal/schema"
+	"github.com/choiceoh/topbid/backend/internal/schema"
 )
 
 // Role buckets. Separate because sealing and row-filtering apply differently:

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/choiceoh/phaeton/backend/internal/events"
+	"github.com/choiceoh/topbid/backend/internal/events"
 )
 
 // SSEHandler serves Server-Sent Events for real-time updates.

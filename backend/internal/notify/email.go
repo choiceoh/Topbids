@@ -21,7 +21,7 @@ type SMTPConfig struct {
 // EmailNotifier sends notifications via SMTP email.
 type EmailNotifier struct {
 	cfg SMTPConfig
-	// resolveEmail maps a Phaeton user UUID to an email address.
+	// resolveEmail maps a Topbid user UUID to an email address.
 	resolveEmail func(ctx context.Context, userID string) (string, error)
 }
 
@@ -79,7 +79,7 @@ func (e *EmailNotifier) SendDirect(to, subject, body string) error {
 
 // SendWithAttachment sends an email with a file attachment.
 func (e *EmailNotifier) SendWithAttachment(to, subject, htmlBody, attachName string, attachData []byte) error {
-	boundary := fmt.Sprintf("phaeton-%x", len(attachData))
+	boundary := fmt.Sprintf("topbid-%x", len(attachData))
 	addr := e.cfg.Host + ":" + e.cfg.Port
 
 	var sb strings.Builder

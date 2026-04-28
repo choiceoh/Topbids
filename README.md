@@ -1,4 +1,4 @@
-# Phaeton v2
+# Topbid v2
 
 노코드 업무앱 플랫폼. 사용자가 코드 없이 앱(폼+데이터+뷰)을 만들고 ERP 기능을 직접 구성합니다.
 
@@ -106,7 +106,7 @@ frontend/
 
 ## 문서
 
-- [전체 설계](docs/08-PHAETON-V2-DESIGN.md) -- 아키텍처, 데이터 모델, API
+- [전체 설계](docs/08-TOPBID-V2-DESIGN.md) -- 아키텍처, 데이터 모델, API
 - [Data Engine 가이드](docs/09-DATA-ENGINE-GUIDE.md) -- CRUD/쿼리 구현
 - [경쟁 분석](docs/10-COMPETITIVE-ANALYSIS.md) -- 로드맵
 - [디자인 시스템](docs/06-DESIGN-SYSTEM.md) -- 색상, 타이포, 컴포넌트

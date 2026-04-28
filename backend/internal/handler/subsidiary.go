@@ -14,7 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/choiceoh/phaeton/backend/internal/infra/apierr"
+	"github.com/choiceoh/topbid/backend/internal/infra/apierr"
 )
 
 // Subsidiary represents an auth.subsidiaries row.

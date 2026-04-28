@@ -17,12 +17,12 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/choiceoh/phaeton/backend/internal/bid"
-	"github.com/choiceoh/phaeton/backend/internal/events"
-	"github.com/choiceoh/phaeton/backend/internal/formula"
-	"github.com/choiceoh/phaeton/backend/internal/middleware"
-	"github.com/choiceoh/phaeton/backend/internal/pgutil"
-	"github.com/choiceoh/phaeton/backend/internal/schema"
+	"github.com/choiceoh/topbid/backend/internal/bid"
+	"github.com/choiceoh/topbid/backend/internal/events"
+	"github.com/choiceoh/topbid/backend/internal/formula"
+	"github.com/choiceoh/topbid/backend/internal/middleware"
+	"github.com/choiceoh/topbid/backend/internal/pgutil"
+	"github.com/choiceoh/topbid/backend/internal/schema"
 )
 
 // querier is satisfied by both *pgxpool.Pool and pgx.Tx, allowing

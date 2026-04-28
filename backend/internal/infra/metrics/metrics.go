@@ -155,13 +155,13 @@ func (h *Histogram) writeTo(w io.Writer) {
 	}
 }
 
-// --- Phaeton metrics ---
+// --- Topbid metrics ---
 
 var (
-	HTTPRequestsTotal = NewCounter("phaeton_http_requests_total", "Total HTTP requests.", "method", "path", "status")
-	HTTPDuration      = NewHistogram("phaeton_http_duration_seconds", "HTTP request duration.",
+	HTTPRequestsTotal = NewCounter("topbid_http_requests_total", "Total HTTP requests.", "method", "path", "status")
+	HTTPDuration      = NewHistogram("topbid_http_duration_seconds", "HTTP request duration.",
 		[]float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5}, "method")
-	ActiveApps = NewGauge("phaeton_active_apps", "Number of works apps.")
+	ActiveApps = NewGauge("topbid_active_apps", "Number of works apps.")
 )
 
 var allMetrics = []interface{ writeTo(io.Writer) }{

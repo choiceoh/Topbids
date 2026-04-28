@@ -6,13 +6,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/choiceoh/phaeton/backend/internal/bid"
-	"github.com/choiceoh/phaeton/backend/internal/seed"
-	"github.com/choiceoh/phaeton/backend/internal/testutil"
+	"github.com/choiceoh/topbid/backend/internal/bid"
+	"github.com/choiceoh/topbid/backend/internal/seed"
+	"github.com/choiceoh/topbid/backend/internal/testutil"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/choiceoh/phaeton/backend/internal/migration"
-	"github.com/choiceoh/phaeton/backend/internal/schema"
+	"github.com/choiceoh/topbid/backend/internal/migration"
+	"github.com/choiceoh/topbid/backend/internal/schema"
 )
 
 // Integration tests for CancelRFQ / WithdrawBid. DB-dependent; skipped if

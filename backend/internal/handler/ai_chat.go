@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/choiceoh/phaeton/backend/internal/ai"
-	"github.com/choiceoh/phaeton/backend/internal/pgutil"
+	"github.com/choiceoh/topbid/backend/internal/ai"
+	"github.com/choiceoh/topbid/backend/internal/pgutil"
 )
 
 type aiChatRequest struct {
@@ -23,7 +23,7 @@ type aiChatResponse struct {
 	Reply string `json:"reply"`
 }
 
-const chatSystemPrompt = `You are a helpful assistant for Phaeton, a no-code business app platform used by a Korean company.
+const chatSystemPrompt = `You are a helpful assistant for Topbid, a no-code business app platform used by a Korean company.
 Your role is to answer user questions about the platform and help them use it effectively.
 
 ` + chatGuide + `

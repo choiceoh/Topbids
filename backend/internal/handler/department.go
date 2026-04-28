@@ -15,7 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/choiceoh/phaeton/backend/internal/infra/apierr"
+	"github.com/choiceoh/topbid/backend/internal/infra/apierr"
 )
 
 // Department represents an auth.departments row.

@@ -1,4 +1,4 @@
-// Package config centralizes all environment variable reading for the Phaeton server.
+// Package config centralizes all environment variable reading for the Topbid server.
 // Call Load() once at startup; the returned Config is then passed to subsystem constructors
 // via dependency injection. No other package should call os.Getenv for configuration.
 package config
@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// Config holds all environment-driven settings for the Phaeton server.
+// Config holds all environment-driven settings for the Topbid server.
 type Config struct {
 	// Env is the GO_ENV value ("production" enables stricter defaults).
 	Env    string
@@ -91,7 +91,7 @@ func Load() (*Config, error) {
 		if isProd {
 			return nil, fmt.Errorf("JWT_SECRET environment variable is required in production")
 		}
-		jwtSecret = "phaeton-dev-secret-change-in-production"
+		jwtSecret = "topbid-dev-secret-change-in-production"
 	}
 
 	authDisabled := false
@@ -110,7 +110,7 @@ func Load() (*Config, error) {
 		WebhookSecret: os.Getenv("WEBHOOK_SECRET"),
 
 		DB: DBConfig{
-			URL:                envOr("DATABASE_URL", "postgres://phaeton:phaeton@localhost:5432/phaeton?sslmode=disable"),
+			URL:                envOr("DATABASE_URL", "postgres://topbid:topbid@localhost:5432/topbid?sslmode=disable"),
 			MaxConns:           envInt("DB_MAX_CONNS", 50),
 			MinConns:           envInt("DB_MIN_CONNS", 5),
 			StatementTimeoutMS: envInt("DB_STATEMENT_TIMEOUT_MS", 30000),
@@ -136,7 +136,7 @@ func Load() (*Config, error) {
 	// SAML (optional).
 	if idpURL := os.Getenv("SAML_IDP_METADATA_URL"); idpURL != "" {
 		cfg.SAML = &SAMLConfig{
-			EntityID:       envOr("SAML_ENTITY_ID", "phaeton"),
+			EntityID:       envOr("SAML_ENTITY_ID", "topbid"),
 			RootURL:        envOr("SAML_ROOT_URL", "http://localhost:8080"),
 			CertPath:       envOr("SAML_CERT_PATH", "saml/sp.crt"),
 			KeyPath:        envOr("SAML_KEY_PATH", "saml/sp.key"),

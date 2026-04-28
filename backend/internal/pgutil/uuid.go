@@ -1,4 +1,4 @@
-// Package pgutil provides small PostgreSQL helpers shared across the Phaeton engine.
+// Package pgutil provides small PostgreSQL helpers shared across the Topbid engine.
 package pgutil
 
 import "github.com/jackc/pgx/v5/pgtype"

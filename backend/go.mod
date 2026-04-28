@@ -1,4 +1,4 @@
-module github.com/choiceoh/phaeton/backend
+module github.com/choiceoh/topbid/backend
 
 go 1.26.1
 

@@ -1,0 +1,11 @@
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: topbid-tunnel
+    restart: unless-stopped
+    user: "1000:1000"
+    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run topbid
+    volumes:
+      - /home/choiceoh/.cloudflared:/etc/cloudflared:ro
+    depends_on:
+      - app

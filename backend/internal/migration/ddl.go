@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/choiceoh/phaeton/backend/internal/pgutil"
-	"github.com/choiceoh/phaeton/backend/internal/schema"
+	"github.com/choiceoh/topbid/backend/internal/pgutil"
+	"github.com/choiceoh/topbid/backend/internal/schema"
 )
 
 // FieldTypeToPG maps a schema field type to its PostgreSQL column type.

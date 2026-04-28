@@ -1,31 +1,33 @@
 services:
   db:
     image: postgres:16-alpine
+    container_name: topbid-db
     environment:
-      POSTGRES_USER: phaeton
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-phaeton}
-      POSTGRES_DB: phaeton
+      POSTGRES_USER: topbid
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-topbid}
+      POSTGRES_DB: topbid
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U phaeton"]
+      test: ["CMD-SHELL", "pg_isready -U topbid"]
       interval: 5s
       timeout: 3s
       retries: 5
 
   app:
     build: .
+    container_name: topbid-app
     ports:
-      - "8080:8080"
+      - "8081:8081"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
-      DATABASE_URL: postgres://phaeton:${DB_PASSWORD:-phaeton}@db:5432/phaeton?sslmode=disable
+      DATABASE_URL: postgres://topbid:${DB_PASSWORD:-topbid}@db:5432/topbid?sslmode=disable
       CORS_ORIGIN: ${CORS_ORIGIN:-}
-      JWT_SECRET: ${JWT_SECRET:-phaeton-dev-secret}
-      ADDR: ":8080"
+      JWT_SECRET: ${JWT_SECRET:-topbid-dev-secret}
+      ADDR: ":8081"
       AI_BASE_URL: ${AI_BASE_URL:-http://host.docker.internal:8000}
     depends_on:
       db:
@@ -48,11 +50,11 @@ services:
     volumes:
       - ./scripts:/scripts:ro
     environment:
-      DATABASE_URL: postgres://phaeton:${DB_PASSWORD:-phaeton}@db:5432/phaeton?sslmode=disable
+      DATABASE_URL: postgres://topbid:${DB_PASSWORD:-topbid}@db:5432/topbid?sslmode=disable
       DROPBOX_REFRESH_TOKEN: ${DROPBOX_REFRESH_TOKEN:-}
       DROPBOX_APP_KEY: ${DROPBOX_APP_KEY:-}
       DROPBOX_APP_SECRET: ${DROPBOX_APP_SECRET:-}
-      DROPBOX_BACKUP_PATH: ${DROPBOX_BACKUP_PATH:-/phaeton-backups}
+      DROPBOX_BACKUP_PATH: ${DROPBOX_BACKUP_PATH:-/topbid-backups}
       BACKUP_RETAIN_DAYS: ${BACKUP_RETAIN_DAYS:-30}
       BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-24}
     depends_on:
@@ -64,5 +66,4 @@ services:
 
 volumes:
   pgdata:
-    external: true
-    name: phaeton_pgdata
+    name: topbid_pgdata

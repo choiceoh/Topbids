@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/choiceoh/phaeton/backend/internal/infra/apierr"
-	"github.com/choiceoh/phaeton/backend/internal/schema"
+	"github.com/choiceoh/topbid/backend/internal/infra/apierr"
+	"github.com/choiceoh/topbid/backend/internal/schema"
 )
 
 // withDeadline returns a new request with the given timeout applied to its context.

@@ -10,9 +10,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-pdf/fpdf"
 
-	"github.com/choiceoh/phaeton/backend/internal/middleware"
-	"github.com/choiceoh/phaeton/backend/internal/pgutil"
-	"github.com/choiceoh/phaeton/backend/internal/schema"
+	"github.com/choiceoh/topbid/backend/internal/middleware"
+	"github.com/choiceoh/topbid/backend/internal/pgutil"
+	"github.com/choiceoh/topbid/backend/internal/schema"
 )
 
 // ExportPDF generates a PDF report of the (filtered) dataset and streams it
@@ -167,7 +167,7 @@ func buildPDF(col schema.Collection, fields []schema.Field, records []map[string
 	pdf.Ln(4)
 	pdf.SetFont(fontFamily, "", 7)
 	pdf.SetTextColor(128, 128, 128)
-	pdf.CellFormat(0, 5, fmt.Sprintf("Phaeton - %s  |  %d rows", col.Label, len(records)), "", 1, "R", false, 0, "")
+	pdf.CellFormat(0, 5, fmt.Sprintf("Topbid - %s  |  %d rows", col.Label, len(records)), "", 1, "R", false, 0, "")
 
 	return pdf
 }

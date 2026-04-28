@@ -1,4 +1,4 @@
-// Package seed creates preset collections for Phaeton's domain (energy project management).
+// Package seed creates preset collections for Topbid's domain (energy project management).
 // Idempotent: checks for existence before creating.
 package seed
 
@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/choiceoh/phaeton/backend/internal/migration"
-	"github.com/choiceoh/phaeton/backend/internal/schema"
+	"github.com/choiceoh/topbid/backend/internal/migration"
+	"github.com/choiceoh/topbid/backend/internal/schema"
 )
 
 // Preset encodes a collection to create if it does not already exist.

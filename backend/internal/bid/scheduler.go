@@ -8,8 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/choiceoh/phaeton/backend/internal/events"
-	"github.com/choiceoh/phaeton/backend/internal/schema"
+	"github.com/choiceoh/topbid/backend/internal/events"
+	"github.com/choiceoh/topbid/backend/internal/schema"
 )
 
 // RFQ status values. Kept in sync with the "rfqs" preset (see

@@ -2,7 +2,7 @@
 //
 // Actual IdP integration is deferred until the IdP metadata XML is received.
 // This package wires up the crewjam/saml library, exposes ACS / metadata
-// endpoints, and converts SAML assertions into Phaeton JWTs.
+// endpoints, and converts SAML assertions into Topbid JWTs.
 package samlsp
 
 import (
@@ -21,7 +21,7 @@ import (
 // Config holds SAML SP configuration.
 // All values are read from environment variables at startup.
 type Config struct {
-	// EntityID is the SP entity ID (e.g. "https://phaeton.example.com/saml").
+	// EntityID is the SP entity ID (e.g. "https://topbid.example.com/saml").
 	EntityID string
 	// RootURL is the application root URL used for ACS/SLO callbacks.
 	RootURL string
@@ -34,7 +34,7 @@ type Config struct {
 }
 
 // Middleware wraps the crewjam/saml middleware and provides hooks
-// for Phaeton-specific user provisioning.
+// for Topbid-specific user provisioning.
 type Middleware struct {
 	inner *samlsp.Middleware
 }
